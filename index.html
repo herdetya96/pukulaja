@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>PUKUL AJA! — The Face-Punching Arcade</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#16110d;
+    --red:#e03616;
+    --red-deep:#a31f08;
+    --cream:#f4ead6;
+    --cream-dim:#e7d9bd;
+    --gold:#f2b418;
+    --display:'Anton', Impact, sans-serif;
+    --body:'Barlow Condensed', 'Arial Narrow', sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overflow:hidden;background:#0c0a10;font-family:var(--body);
+    user-select:none;-webkit-user-select:none;touch-action:none}
+  canvas#game{display:block;width:100%;height:100%}
+
+  /* ============ halftone helper ============ */
+  .halftone{background-image:radial-gradient(circle, rgba(22,17,13,.16) 1.3px, transparent 1.4px);
+    background-size:11px 11px}
+
+  /* ============ START OVERLAY ============ */
+  #start{position:fixed;inset:0;z-index:50;background:var(--cream);overflow-y:auto;
+    display:flex;align-items:center;justify-content:center;touch-action:pan-y}
+  #start::before{content:'';position:fixed;inset:0;pointer-events:none;
+    background-image:radial-gradient(circle, rgba(22,17,13,.14) 1.3px, transparent 1.4px);
+    background-size:11px 11px}
+  #start::after{content:'';position:fixed;inset:0;pointer-events:none;
+    box-shadow:inset 0 0 140px rgba(160,80,20,.25)}
+  .poster{position:relative;width:min(680px, 94vw);padding:34px 24px 44px;text-align:center}
+  .poster .tape{display:inline-block;background:var(--ink);color:var(--cream);
+    font-family:var(--body);font-weight:700;font-size:15px;letter-spacing:.42em;
+    padding:6px 18px 6px 22px;transform:rotate(-1.5deg);text-transform:uppercase}
+  h1.title{font-family:var(--display);color:var(--red);line-height:.86;
+    font-size:clamp(72px, 17vw, 150px);letter-spacing:.01em;margin:18px 0 4px;
+    text-shadow:5px 5px 0 var(--ink);transform:rotate(-2deg)}
+  h1.title .bang{color:var(--ink);text-shadow:5px 5px 0 var(--red)}
+  .subtitle{font-weight:700;font-size:clamp(16px,3.4vw,22px);letter-spacing:.3em;
+    text-transform:uppercase;color:var(--ink);margin-bottom:26px}
+  .subtitle em{font-style:normal;background:var(--gold);padding:1px 8px;box-shadow:2px 2px 0 var(--ink)}
+
+  .star-badge{position:absolute;top:8px;right:4%;width:92px;height:92px;
+    animation:spin-slow 14s linear infinite;pointer-events:none}
+  @keyframes spin-slow{to{transform:rotate(360deg)}}
+
+  #dropzone{position:relative;margin:0 auto;width:min(440px,88vw);cursor:pointer;
+    border:3px dashed var(--ink);background:rgba(255,255,255,.45);
+    padding:26px 18px;transform:rotate(.6deg);transition:transform .15s, background .15s}
+  #dropzone:hover,#dropzone.drag{background:#fff;transform:rotate(.6deg) scale(1.02)}
+  #dropzone .dz-big{font-family:var(--display);font-size:30px;color:var(--ink);letter-spacing:.04em}
+  #dropzone .dz-small{font-weight:600;font-size:16px;letter-spacing:.14em;color:#6b5c45;text-transform:uppercase;margin-top:6px}
+  #dropzone.has-photo{border-style:solid;background:#fff}
+  #facePreview{display:none;width:108px;height:132px;object-fit:cover;border-radius:50%/46%;
+    border:3px solid var(--ink);margin:0 auto 10px;box-shadow:4px 4px 0 var(--red)}
+  #dropzone.has-photo #facePreview{display:block}
+
+  .btn-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:26px}
+  .big-btn{font-family:var(--display);font-size:26px;letter-spacing:.05em;cursor:pointer;
+    border:3px solid var(--ink);padding:14px 30px 12px;color:var(--ink);background:var(--gold);
+    box-shadow:5px 5px 0 var(--ink);transform:rotate(-1deg);transition:all .12s;text-transform:uppercase}
+  .big-btn:hover{transform:rotate(-1deg) translate(-2px,-2px);box-shadow:7px 7px 0 var(--ink)}
+  .big-btn:active{transform:rotate(-1deg) translate(3px,3px);box-shadow:1px 1px 0 var(--ink)}
+  .big-btn.primary{background:var(--red);color:var(--cream)}
+  .big-btn:disabled{opacity:.35;cursor:not-allowed}
+
+  .controls-card{margin:34px auto 0;width:min(520px,90vw);border:3px solid var(--ink);
+    background:var(--cream-dim);padding:14px 18px 18px;transform:rotate(-.5deg);
+    box-shadow:6px 6px 0 rgba(22,17,13,.25)}
+  .controls-card h3{font-family:var(--display);letter-spacing:.08em;font-size:18px;
+    color:var(--red-deep);margin-bottom:10px;text-transform:uppercase}
+  .ctl-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px 22px;text-align:left;
+    font-size:17px;font-weight:600;color:var(--ink)}
+  .ctl-grid b{display:inline-block;min-width:34px;text-align:center;background:var(--ink);
+    color:var(--cream);font-family:var(--body);font-weight:700;border-radius:4px;
+    padding:1px 7px;margin-right:8px;box-shadow:2px 2px 0 rgba(0,0,0,.25)}
+  .privacy{margin-top:20px;font-size:14px;font-weight:600;letter-spacing:.12em;
+    color:#7a6a50;text-transform:uppercase}
+  .touch-note{display:none}
+  body.touch .ctl-grid{display:none}
+  body.touch .touch-note{display:block;font-size:17px;font-weight:600;color:var(--ink);text-align:left;line-height:1.5}
+  .specials{margin-top:12px;border-top:2px dashed rgba(22,17,13,.35);padding-top:10px;
+    font-size:15px;font-weight:700;letter-spacing:.03em;color:var(--red-deep);
+    text-align:left;line-height:1.9}
+  .specials b{background:var(--ink);color:var(--gold);padding:1px 7px;border-radius:3px;white-space:nowrap}
+
+  /* ============ HUD ============ */
+  #hud{position:fixed;inset:0;z-index:10;pointer-events:none;display:none}
+  body.playing #hud{display:block}
+
+  .score-plate{position:absolute;top:14px;left:14px;background:var(--cream);
+    border:3px solid var(--ink);box-shadow:4px 4px 0 rgba(0,0,0,.5);
+    padding:6px 16px 8px;transform:rotate(-1.2deg);min-width:150px}
+  .score-plate .lbl{font-size:12px;font-weight:700;letter-spacing:.34em;color:var(--red-deep);text-transform:uppercase}
+  #score{font-family:var(--display);font-size:38px;line-height:1;color:var(--ink)}
+  .hi{font-size:13px;font-weight:700;letter-spacing:.1em;color:#7a6a50}
+
+  #combo{position:absolute;top:108px;left:18px;font-family:var(--display);
+    color:var(--gold);font-size:34px;-webkit-text-stroke:1.5px var(--ink);
+    text-shadow:3px 3px 0 var(--ink);transform:rotate(-4deg);opacity:0}
+  #combo.show{opacity:1}
+  #combo.pop{animation:combo-pop .25s ease-out}
+  @keyframes combo-pop{0%{transform:rotate(-4deg) scale(1.6)}100%{transform:rotate(-4deg) scale(1)}}
+
+  .hp-wrap{position:absolute;top:16px;left:50%;transform:translateX(-50%) rotate(.4deg);
+    width:min(380px,52vw);text-align:center}
+  .hp-name{display:inline-block;background:var(--ink);color:var(--cream);font-weight:700;
+    font-size:13px;letter-spacing:.3em;padding:3px 14px;text-transform:uppercase;margin-bottom:5px}
+  .hp-bar{height:20px;border:3px solid var(--ink);background:var(--cream);
+    box-shadow:3px 3px 0 rgba(0,0,0,.5);overflow:hidden}
+  #hpFill{height:100%;width:100%;background:repeating-linear-gradient(135deg,var(--red) 0 12px,var(--red-deep) 12px 24px);
+    transition:width .12s ease-out}
+
+  .round-plate{position:absolute;top:14px;right:14px;background:var(--gold);border:3px solid var(--ink);
+    box-shadow:4px 4px 0 rgba(0,0,0,.5);padding:5px 14px 7px;transform:rotate(1.4deg);text-align:center}
+  .round-plate .lbl{font-size:11px;font-weight:700;letter-spacing:.3em;color:var(--ink);text-transform:uppercase}
+  #round{font-family:var(--display);font-size:30px;line-height:1;color:var(--ink)}
+
+  #keysbar{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);
+    background:rgba(12,10,16,.72);border:2px solid rgba(244,234,214,.25);border-radius:8px;
+    color:var(--cream);font-weight:600;font-size:15px;letter-spacing:.06em;
+    padding:7px 18px;white-space:nowrap;backdrop-filter:blur(3px)}
+  #keysbar b{background:var(--cream);color:var(--ink);border-radius:4px;padding:0 7px;margin:0 2px;font-weight:700}
+  body.touch #keysbar{display:none}
+  @media (max-width:760px){#keysbar{display:none}}
+
+  #changePhoto{position:absolute;bottom:12px;right:12px;pointer-events:auto;cursor:pointer;
+    font-family:var(--body);font-weight:700;font-size:13px;letter-spacing:.18em;text-transform:uppercase;
+    background:var(--cream);color:var(--ink);border:2px solid var(--ink);
+    box-shadow:3px 3px 0 rgba(0,0,0,.5);padding:7px 12px;transform:rotate(-1deg)}
+  #changePhoto:active{transform:rotate(-1deg) translate(2px,2px);box-shadow:1px 1px 0 rgba(0,0,0,.5)}
+
+  /* touch controls: d-pad + action buttons */
+  #dpad,#punchBtns{display:none}
+  body.touch #dpad{display:grid;position:absolute;left:16px;bottom:22px;pointer-events:auto;
+    grid-template-columns:repeat(3,58px);grid-template-rows:repeat(3,58px);gap:5px}
+  .dbtn{border:3px solid var(--ink);background:rgba(244,234,214,.92);color:var(--ink);
+    font-family:var(--display);font-size:10px;line-height:1.15;letter-spacing:.04em;
+    border-radius:12px;box-shadow:0 4px 0 var(--ink);cursor:pointer;padding:0;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;text-transform:uppercase}
+  .dbtn .arr{font-size:17px;line-height:1}
+  .dbtn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--ink);background:var(--gold)}
+  .dbtn.up{grid-area:1/2}
+  .dbtn.left{grid-area:2/1}
+  .dbtn.center{grid-area:2/2;background:var(--red);color:var(--cream);border-radius:50%;font-size:11px}
+  .dbtn.right{grid-area:2/3}
+  .dbtn.down{grid-area:3/2}
+  body.touch #punchBtns{display:flex;position:absolute;right:16px;bottom:30px;gap:14px;
+    pointer-events:auto;align-items:flex-end}
+  .pbtn{width:72px;height:72px;border-radius:50%;border:3px solid var(--ink);cursor:pointer;
+    font-family:var(--display);font-size:15px;color:var(--ink);background:var(--gold);
+    box-shadow:0 5px 0 var(--ink);text-transform:uppercase}
+  .pbtn:active{transform:translateY(4px);box-shadow:0 1px 0 var(--ink)}
+  .pbtn.big{width:94px;height:94px;font-size:20px;background:var(--red);color:var(--cream)}
+  body.touch #changePhoto{bottom:auto;top:150px}
+
+  /* compact HUD for narrow screens */
+  @media (max-width:640px){
+    .score-plate{min-width:116px;padding:4px 12px 6px}
+    #score{font-size:28px}
+    .round-plate{padding:4px 10px 5px}
+    #round{font-size:24px}
+    .hp-wrap{top:86px;width:min(300px,62vw)}
+    #combo{top:148px;font-size:27px}
+  }
+
+  /* floating fx layer */
+  #fx{position:fixed;inset:0;z-index:20;pointer-events:none;overflow:hidden}
+  .dmg{position:absolute;font-family:var(--display);color:var(--cream);
+    -webkit-text-stroke:1.5px var(--ink);text-shadow:3px 3px 0 var(--ink);
+    font-size:34px;animation:dmg-rise .8s ease-out forwards;will-change:transform,opacity}
+  .dmg.big{font-size:48px;color:var(--gold)}
+  .dmg.crit{font-size:56px;color:var(--red);-webkit-text-stroke:2px var(--cream)}
+  @keyframes dmg-rise{
+    0%{opacity:0;transform:translate(-50%,-50%) scale(.4) rotate(var(--rot))}
+    12%{opacity:1;transform:translate(-50%,-58%) scale(1.25) rotate(var(--rot))}
+    100%{opacity:0;transform:translate(-50%,-150%) scale(1) rotate(var(--rot))}
+  }
+  .stamp{position:absolute;font-family:var(--display);font-size:24px;letter-spacing:.08em;
+    color:var(--ink);background:var(--cream);border:3px solid var(--ink);padding:2px 12px;
+    box-shadow:4px 4px 0 rgba(0,0,0,.45);animation:stamp-in .55s ease-out forwards;will-change:transform,opacity}
+  @keyframes stamp-in{
+    0%{opacity:0;transform:translate(-50%,-50%) scale(2.2) rotate(var(--rot))}
+    25%{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(var(--rot))}
+    80%{opacity:1}
+    100%{opacity:0;transform:translate(-50%,-60%) scale(.95) rotate(var(--rot))}
+  }
+
+  .special-banner{position:fixed;left:50%;top:38%;z-index:28;pointer-events:none;white-space:nowrap;
+    font-family:var(--display);font-size:clamp(42px,10vw,92px);color:var(--gold);
+    -webkit-text-stroke:2px var(--ink);
+    text-shadow:7px 7px 0 var(--ink),0 0 70px rgba(242,180,24,.85);
+    animation:special-slam .95s cubic-bezier(.2,2,.4,1) forwards}
+  @keyframes special-slam{
+    0%{opacity:0;transform:translate(-50%,-50%) rotate(-5deg) scale(3)}
+    18%{opacity:1;transform:translate(-50%,-50%) rotate(-5deg) scale(1)}
+    75%{opacity:1}
+    100%{opacity:0;transform:translate(-50%,-75%) rotate(-5deg) scale(1.04)}
+  }
+
+  #koBanner{position:fixed;inset:0;z-index:30;display:none;align-items:center;justify-content:center;pointer-events:none}
+  #koBanner.show{display:flex}
+  #koBanner .ko-text{font-family:var(--display);font-size:clamp(110px,28vw,260px);color:var(--red);
+    -webkit-text-stroke:4px var(--ink);text-shadow:10px 10px 0 var(--ink);
+    transform:rotate(-6deg);animation:ko-slam .5s cubic-bezier(.2,2.4,.4,1) forwards}
+  @keyframes ko-slam{0%{transform:rotate(-6deg) scale(4);opacity:0}100%{transform:rotate(-6deg) scale(1);opacity:1}}
+  #koBanner .ko-sub{position:absolute;margin-top:170px;font-family:var(--display);font-size:30px;
+    color:var(--gold);-webkit-text-stroke:1px var(--ink);text-shadow:3px 3px 0 var(--ink);transform:rotate(-3deg)}
+
+  #flash{position:fixed;inset:0;z-index:25;background:#fff;opacity:0;pointer-events:none}
+  #vignette{position:fixed;inset:0;z-index:5;pointer-events:none;
+    box-shadow:inset 0 0 180px rgba(0,0,0,.85)}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="vignette"></div>
+<div id="flash"></div>
+<div id="fx"></div>
+
+<div id="koBanner"><div class="ko-text">K.O.!</div><div class="ko-sub"></div></div>
+
+<!-- ================= HUD ================= -->
+<div id="hud">
+  <div class="score-plate">
+    <div class="lbl">Score</div>
+    <div id="score">0</div>
+    <div class="hi">BEST <span id="hiscore">0</span></div>
+  </div>
+  <div id="combo"></div>
+  <div class="hp-wrap">
+    <div class="hp-name" id="oppName">The Opponent</div>
+    <div class="hp-bar"><div id="hpFill"></div></div>
+  </div>
+  <div class="round-plate"><div class="lbl">Round</div><div id="round">1</div></div>
+
+  <div id="keysbar">
+    <b>J</b> jab &nbsp; <b>K</b> cross &nbsp; <b>H</b> hook L &nbsp; <b>L</b> hook R &nbsp; <b>U</b> uppercut &nbsp; <b>SPACE</b> flurry &nbsp;·&nbsp; or click to punch
+  </div>
+  <button id="changePhoto">↺ change face</button>
+
+  <div id="dpad">
+    <button class="dbtn up" data-punch="jabR"><span class="arr">▲</span>cross</button>
+    <button class="dbtn left" data-punch="hookL"><span class="arr">◀</span>hook</button>
+    <button class="dbtn center" data-punch="jabL">🥊<br>jab</button>
+    <button class="dbtn right" data-punch="hookR"><span class="arr">▶</span>hook</button>
+    <button class="dbtn down" data-punch="upper"><span class="arr">▼</span>upper</button>
+  </div>
+  <div id="punchBtns">
+    <button class="pbtn" data-punch="upper">Upper</button>
+    <button class="pbtn big" data-punch="jabL">JAB</button>
+  </div>
+</div>
+
+<!-- ================= START / UPLOAD ================= -->
+<div id="start">
+  <div class="poster">
+    <svg class="star-badge" viewBox="0 0 100 100">
+      <polygon points="50,2 61,35 98,35 68,57 79,92 50,71 21,92 32,57 2,35 39,35" fill="#e03616" stroke="#16110d" stroke-width="3"/>
+      <text x="50" y="56" text-anchor="middle" font-family="Anton, Impact" font-size="15" fill="#f4ead6">POW!</text>
+    </svg>
+    <span class="tape">Tonight · One Night Only · Main Event</span>
+    <h1 class="title">PUKUL<br>AJA<span class="bang">!</span></h1>
+    <div class="subtitle">The <em>face-punching</em> stress arcade</div>
+
+    <div id="dropzone">
+      <img id="facePreview" alt="">
+      <div class="dz-big" id="dzTitle">UPLOAD A FACE</div>
+      <div class="dz-small" id="dzSub">tap or drop a photo — it goes on the dummy's head</div>
+      <input type="file" id="fileInput" accept="image/*" hidden>
+    </div>
+
+    <div class="btn-row">
+      <button class="big-btn primary" id="fightBtn" disabled>FIGHT! 🥊</button>
+      <button class="big-btn" id="dummyBtn">Use practice dummy</button>
+    </div>
+
+    <div class="controls-card">
+      <h3>★ How to throw hands ★</h3>
+      <div class="ctl-grid">
+        <span><b>J</b> Left jab — quick, +10</span>
+        <span><b>K</b> Right cross — solid, +15</span>
+        <span><b>H</b> Left hook — wide, +20</span>
+        <span><b>L</b> Right hook — wide, +20</span>
+        <span><b>U</b> Uppercut — huge, +30</span>
+        <span><b>␣</b> Space — jab flurry</span>
+        <span><b>🖱</b> Click — jab / cross</span>
+        <span><b>C</b> Change the face</span>
+      </div>
+      <div class="touch-note">
+        🎮 <b>D-pad:</b> ▲ cross · ◀ ▶ hooks · ▼ uppercut · center = jab.<br>
+        🥊 Big buttons on the right for jab &amp; uppercut. Tap the dummy for quick jabs.<br>
+        Land hits fast to build a <b>combo multiplier</b>!
+      </div>
+      <div class="specials">
+        💥 SECRET MOVES — chain these fast:<br>
+        <b>HOOK · HOOK · JAB</b> Dynamite &nbsp;
+        <b>JAB · CROSS · UPPER</b> Rocket &nbsp;
+        <b>CROSS · CROSS · HOOK</b> Tornado
+      </div>
+    </div>
+
+    <div class="privacy">⛓ your photo never leaves this device ⛓</div>
+  </div>
+</div>
+
+<script src="lib/three.min.js"></script>
+<script>
+'use strict';
+/* =========================================================
+   PUKUL AJA! — 3D face-punching stress arcade
+   ========================================================= */
+
+const $ = id => document.getElementById(id);
+
+/* ---------------- audio (all synthesized) ---------------- */
+let AC = null, noiseBuf = null;
+function audioInit(){
+  if (AC) return;
+  AC = new (window.AudioContext || window.webkitAudioContext)();
+  noiseBuf = AC.createBuffer(1, AC.sampleRate * 0.4, AC.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+}
+function playThud(power = 1, pitch = 1){
+  if (!AC) return;
+  const t = AC.currentTime;
+  // body: noise burst through lowpass
+  const n = AC.createBufferSource(); n.buffer = noiseBuf;
+  const f = AC.createBiquadFilter(); f.type = 'lowpass';
+  f.frequency.setValueAtTime(900 * pitch, t);
+  f.frequency.exponentialRampToValueAtTime(120, t + 0.12);
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.5 * power, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+  n.connect(f).connect(g).connect(AC.destination);
+  n.start(t); n.stop(t + 0.2);
+  // chest: sine thump
+  const o = AC.createOscillator(); o.type = 'sine';
+  o.frequency.setValueAtTime(120 * pitch, t);
+  o.frequency.exponentialRampToValueAtTime(45, t + 0.18);
+  const og = AC.createGain();
+  og.gain.setValueAtTime(0.55 * power, t);
+  og.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+  o.connect(og).connect(AC.destination);
+  o.start(t); o.stop(t + 0.25);
+}
+function playWhoosh(){
+  if (!AC) return;
+  const t = AC.currentTime;
+  const n = AC.createBufferSource(); n.buffer = noiseBuf;
+  const f = AC.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.2;
+  f.frequency.setValueAtTime(400, t);
+  f.frequency.exponentialRampToValueAtTime(1800, t + 0.09);
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.12, t + 0.05);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
+  n.connect(f).connect(g).connect(AC.destination);
+  n.start(t); n.stop(t + 0.16);
+}
+function playBoom(){
+  if (!AC) return;
+  const t = AC.currentTime;
+  const n = AC.createBufferSource(); n.buffer = noiseBuf; n.loop = true;
+  const f = AC.createBiquadFilter(); f.type = 'lowpass';
+  f.frequency.setValueAtTime(700, t);
+  f.frequency.exponentialRampToValueAtTime(55, t + 0.5);
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.9, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+  n.connect(f).connect(g).connect(AC.destination);
+  n.start(t); n.stop(t + 0.65);
+  const o = AC.createOscillator(); o.type = 'sine';
+  o.frequency.setValueAtTime(95, t);
+  o.frequency.exponentialRampToValueAtTime(26, t + 0.55);
+  const og = AC.createGain();
+  og.gain.setValueAtTime(0.85, t);
+  og.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+  o.connect(og).connect(AC.destination);
+  o.start(t); o.stop(t + 0.65);
+}
+function playBell(){
+  if (!AC) return;
+  for (let i = 0; i < 3; i++){
+    const t = AC.currentTime + i * 0.45;
+    [627, 941, 1517].forEach((fr, j) => {
+      const o = AC.createOscillator(); o.type = 'sine';
+      o.frequency.value = fr * (1 + (Math.random() - 0.5) * 0.004);
+      const g = AC.createGain();
+      g.gain.setValueAtTime(0.22 / (j + 1), t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 1.4);
+      o.connect(g).connect(AC.destination);
+      o.start(t); o.stop(t + 1.5);
+    });
+  }
+}
+
+/* ---------------- three.js scene ---------------- */
+const renderer = new THREE.WebGLRenderer({ canvas: $('game'), antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0c0a10);
+scene.fog = new THREE.Fog(0x0c0a10, 6, 16);
+
+const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 50);
+const CAM_POS = new THREE.Vector3(0, 1.62, 2.35);
+camera.position.copy(CAM_POS);
+camera.lookAt(0, 1.5, 0);
+
+function resize(){
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+
+/* lights */
+scene.add(new THREE.AmbientLight(0x404060, 0.9));
+const spot = new THREE.SpotLight(0xfff0d8, 130, 20, 0.5, 0.45, 1.6);
+spot.position.set(1.6, 4.6, 2.4);
+spot.target.position.set(0, 1, 0);
+spot.castShadow = true;
+spot.shadow.mapSize.set(1024, 1024);
+scene.add(spot, spot.target);
+const rim = new THREE.PointLight(0x3050ff, 30, 12);
+rim.position.set(-2.2, 2.4, -2.6);
+scene.add(rim);
+const rim2 = new THREE.PointLight(0xff5030, 14, 9);
+rim2.position.set(2.6, 1.4, -1.8);
+scene.add(rim2);
+
+/* floor — ring mat drawn on canvas */
+(function makeFloor(){
+  const c = document.createElement('canvas'); c.width = c.height = 1024;
+  const x = c.getContext('2d');
+  const grad = x.createRadialGradient(512, 512, 60, 512, 512, 540);
+  grad.addColorStop(0, '#4a3340'); grad.addColorStop(0.55, '#2a1f2c'); grad.addColorStop(1, '#120e16');
+  x.fillStyle = grad; x.fillRect(0, 0, 1024, 1024);
+  x.strokeStyle = 'rgba(244,234,214,.20)'; x.lineWidth = 5;
+  [180, 320].forEach(r => { x.beginPath(); x.arc(512, 512, r, 0, 7); x.stroke(); });
+  x.strokeStyle = 'rgba(224,54,22,.35)'; x.lineWidth = 14;
+  x.beginPath(); x.arc(512, 512, 430, 0, 7); x.stroke();
+  // scuff marks
+  x.strokeStyle = 'rgba(0,0,0,.25)';
+  for (let i = 0; i < 40; i++){
+    x.lineWidth = 1 + Math.random() * 3;
+    x.beginPath();
+    const a = Math.random() * 1024, b = Math.random() * 1024;
+    x.moveTo(a, b); x.lineTo(a + (Math.random() - 0.5) * 90, b + (Math.random() - 0.5) * 90);
+    x.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const floor = new THREE.Mesh(
+    new THREE.CircleGeometry(8, 48),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.92 })
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  scene.add(floor);
+})();
+
+/* back wall with painted lettering */
+(function makeWall(){
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 512;
+  const x = c.getContext('2d');
+  x.fillStyle = '#141019'; x.fillRect(0, 0, 1024, 512);
+  x.fillStyle = 'rgba(224,54,22,.10)';
+  x.font = '900 190px Anton, Impact, sans-serif';
+  x.textAlign = 'center';
+  x.save(); x.translate(512, 300); x.rotate(-0.03);
+  x.fillText('PUKUL AJA!', 0, 0); x.restore();
+  x.fillStyle = 'rgba(244,234,214,.05)';
+  for (let i = 0; i < 500; i++) x.fillRect(Math.random() * 1024, Math.random() * 512, 2, 2);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const wall = new THREE.Mesh(
+    new THREE.PlaneGeometry(20, 10),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 1 })
+  );
+  wall.position.set(0, 4, -6.5);
+  scene.add(wall);
+})();
+
+/* hanging lamp */
+const lamp = new THREE.Group();
+{
+  const cord = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.012, 0.012, 1.6),
+    new THREE.MeshStandardMaterial({ color: 0x111111 })
+  );
+  cord.position.y = 4.2;
+  const shade = new THREE.Mesh(
+    new THREE.ConeGeometry(0.35, 0.3, 24, 1, true),
+    new THREE.MeshStandardMaterial({ color: 0x1a3a2a, metalness: 0.6, roughness: 0.4, side: THREE.DoubleSide })
+  );
+  shade.position.y = 3.45;
+  const bulb = new THREE.Mesh(
+    new THREE.SphereGeometry(0.07, 12, 12),
+    new THREE.MeshBasicMaterial({ color: 0xfff2c0 })
+  );
+  bulb.position.y = 3.36;
+  lamp.add(cord, shade, bulb);
+  scene.add(lamp);
+}
+
+/* ---------------- the dummy ---------------- */
+const dummy = new THREE.Group();
+scene.add(dummy);
+
+const RED_MAT  = new THREE.MeshStandardMaterial({ color: 0xc52a10, roughness: 0.55 });
+const DARK_MAT = new THREE.MeshStandardMaterial({ color: 0x1c1418, roughness: 0.6 });
+const CREAM_MAT = new THREE.MeshStandardMaterial({ color: 0xefe2c4, roughness: 0.6 });
+let SKIN_MAT = new THREE.MeshStandardMaterial({ color: 0xe8b98c, roughness: 0.65 });
+
+{
+  // weighted base
+  const base = new THREE.Mesh(new THREE.SphereGeometry(0.52, 32, 24), DARK_MAT);
+  base.scale.set(1, 0.42, 1);
+  base.position.y = 0.16;
+  base.castShadow = true;
+  dummy.add(base);
+
+  // inflatable trunk
+  const trunk = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 0.78, 8, 24), RED_MAT);
+  trunk.position.y = 0.82;
+  trunk.castShadow = true;
+  dummy.add(trunk);
+
+  // chest target
+  const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.04, 28), CREAM_MAT);
+  pad.rotation.x = Math.PI / 2;
+  pad.position.set(0, 0.95, 0.315);
+  dummy.add(pad);
+  const ring1 = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.022, 10, 28), RED_MAT);
+  ring1.position.set(0, 0.95, 0.345);
+  dummy.add(ring1);
+  const dot = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.045, 18), RED_MAT);
+  dot.rotation.x = Math.PI / 2;
+  dot.position.set(0, 0.95, 0.318);
+  dummy.add(dot);
+
+  // neck
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.13, 0.22, 18), RED_MAT);
+  neck.position.y = 1.45;
+  dummy.add(neck);
+}
+
+/* head group (gets extra jiggle springs) */
+const headG = new THREE.Group();
+headG.position.y = 1.72;
+dummy.add(headG);
+
+let headMesh, faceMesh;
+{
+  headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.26, 36, 28), SKIN_MAT);
+  headMesh.castShadow = true;
+  headG.add(headMesh);
+
+  // ears
+  [-1, 1].forEach(s => {
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.06, 14, 12), SKIN_MAT);
+    ear.position.set(s * 0.255, 0, 0);
+    ear.scale.set(0.55, 1, 0.8);
+    headG.add(ear);
+  });
+
+  // sweatband
+  const band = new THREE.Mesh(new THREE.TorusGeometry(0.225, 0.055, 12, 32), RED_MAT);
+  band.rotation.x = Math.PI / 2 - 0.28;
+  band.position.y = 0.13;
+  headG.add(band);
+
+  // face decal: a plane shrink-wrapped onto the head sphere
+  const fg = new THREE.PlaneGeometry(0.36, 0.43, 24, 24);
+  const pos = fg.attributes.position;
+  const R = 0.268;
+  for (let i = 0; i < pos.count; i++){
+    const px = pos.getX(i), py = pos.getY(i);
+    const d2 = R * R - px * px - py * py;
+    pos.setZ(i, d2 > 0 ? Math.sqrt(d2) - 0.245 : 0.012);
+  }
+  fg.computeVertexNormals();
+  faceMesh = new THREE.Mesh(fg, new THREE.MeshStandardMaterial({
+    transparent: true, roughness: 0.6,
+  }));
+  faceMesh.position.set(0, -0.01, 0.245);
+  headG.add(faceMesh);
+}
+
+/* dummy shadow proxy ground ellipse for richness — spotlight shadow handles it */
+
+/* ---------------- face texture pipeline ---------------- */
+function defaultFaceCanvas(){
+  const c = document.createElement('canvas'); c.width = 512; c.height = 612;
+  const x = c.getContext('2d');
+  x.fillStyle = '#e8b98c'; x.fillRect(0, 0, 512, 612);
+  // angry brows
+  x.strokeStyle = '#3a2415'; x.lineWidth = 22; x.lineCap = 'round';
+  x.beginPath(); x.moveTo(120, 200); x.lineTo(225, 245); x.stroke();
+  x.beginPath(); x.moveTo(392, 200); x.lineTo(287, 245); x.stroke();
+  // eyes
+  x.fillStyle = '#fff';
+  x.beginPath(); x.ellipse(180, 295, 48, 38, 0, 0, 7); x.fill();
+  x.beginPath(); x.ellipse(332, 295, 48, 38, 0, 0, 7); x.fill();
+  x.fillStyle = '#1c1418';
+  x.beginPath(); x.arc(192, 300, 16, 0, 7); x.fill();
+  x.beginPath(); x.arc(320, 300, 16, 0, 7); x.fill();
+  // nose + frown
+  x.strokeStyle = '#b5825a'; x.lineWidth = 14;
+  x.beginPath(); x.moveTo(256, 320); x.lineTo(256, 392); x.stroke();
+  x.strokeStyle = '#7a3a2a'; x.lineWidth = 18;
+  x.beginPath(); x.arc(256, 520, 70, Math.PI * 1.15, Math.PI * 1.85); x.stroke();
+  // blush
+  x.fillStyle = 'rgba(224,54,22,.30)';
+  x.beginPath(); x.ellipse(120, 400, 36, 24, 0, 0, 7); x.fill();
+  x.beginPath(); x.ellipse(392, 400, 36, 24, 0, 0, 7); x.fill();
+  return c;
+}
+
+function buildFaceTexture(source){ // source: canvas or <img>
+  const c = document.createElement('canvas'); c.width = 512; c.height = 612;
+  const x = c.getContext('2d');
+  // cover-fit crop
+  const sw = source.width || source.naturalWidth, sh = source.height || source.naturalHeight;
+  const scale = Math.max(512 / sw, 612 / sh);
+  const dw = sw * scale, dh = sh * scale;
+  x.drawImage(source, (512 - dw) / 2, (612 - dh) / 2, dw, dh);
+  // soft oval mask so the photo melts into the doll head
+  x.globalCompositeOperation = 'destination-in';
+  const m = x.createRadialGradient(256, 306, 150, 256, 306, 295);
+  m.addColorStop(0, 'rgba(0,0,0,1)');
+  m.addColorStop(0.82, 'rgba(0,0,0,1)');
+  m.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = m;
+  x.beginPath(); x.ellipse(256, 306, 252, 302, 0, 0, 7); x.fill();
+  x.globalCompositeOperation = 'source-over';
+
+  // average color → tint the rest of the head so it blends
+  const px = x.getImageData(206, 256, 100, 100).data;
+  let r = 0, g = 0, b = 0, n = 0;
+  for (let i = 0; i < px.length; i += 16){ r += px[i]; g += px[i + 1]; b += px[i + 2]; n++; }
+  SKIN_MAT.color.setRGB(r / n / 255, g / n / 255, b / n / 255).multiplyScalar(0.92);
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  faceMesh.material.map = tex;
+  faceMesh.material.needsUpdate = true;
+}
+buildFaceTexture(defaultFaceCanvas());
+
+/* ---------------- boxing gloves ---------------- */
+const GLOVE_MAT = new THREE.MeshStandardMaterial({ color: 0xd42b10, roughness: 0.38 });
+const CUFF_MAT  = new THREE.MeshStandardMaterial({ color: 0xf4ead6, roughness: 0.6 });
+
+function makeGlove(side){ // side: -1 left, +1 right
+  const g = new THREE.Group();
+  const fist = new THREE.Mesh(new THREE.SphereGeometry(0.165, 24, 20), GLOVE_MAT);
+  fist.scale.set(1, 0.94, 1.18);
+  const thumb = new THREE.Mesh(new THREE.SphereGeometry(0.075, 14, 12), GLOVE_MAT);
+  thumb.position.set(-side * 0.13, -0.04, 0.05);
+  thumb.scale.set(0.8, 0.8, 1.25);
+  const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.115, 0.15, 18), CUFF_MAT);
+  cuff.rotation.x = Math.PI / 2 - 0.45;
+  cuff.position.set(side * 0.02, -0.11, 0.21);
+  const lace = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.06, 0.13), DARK_MAT);
+  lace.position.set(0, 0.05, 0.16);
+  g.add(fist, thumb, cuff, lace);
+  g.traverse(o => { o.castShadow = false; });
+  return g;
+}
+
+const gloveL = makeGlove(-1), gloveR = makeGlove(1);
+camera.add(gloveL, gloveR);
+scene.add(camera);
+
+const GUARD = {
+  L: { p: new THREE.Vector3(-0.42, -0.40, -0.92), r: new THREE.Euler(0.5, 0.35, 0.25) },
+  R: { p: new THREE.Vector3( 0.42, -0.40, -0.92), r: new THREE.Euler(0.5, -0.35, -0.25) },
+};
+// keep gloves inside the horizontal FOV on narrow (portrait) screens
+function updateGuards(){
+  const gx = 0.42 * Math.min(1, camera.aspect / 1.35);
+  GUARD.L.p.x = -gx; GUARD.R.p.x = gx;
+}
+updateGuards();
+addEventListener('resize', updateGuards);
+gloveL.position.copy(GUARD.L.p); gloveL.rotation.copy(GUARD.L.r);
+gloveR.position.copy(GUARD.R.p); gloveR.rotation.copy(GUARD.R.r);
+
+/* punch definitions */
+const PUNCHES = {
+  jabL:  { hand: 'L', cat: 'jab',   pts: 10, dmg: 5,  dur: 0.21, kind: 'straight', label: 'JAB!' },
+  jabR:  { hand: 'R', cat: 'cross', pts: 15, dmg: 7,  dur: 0.22, kind: 'straight', label: 'CROSS!' },
+  hookL: { hand: 'L', cat: 'hook',  pts: 20, dmg: 10, dur: 0.31, kind: 'hook',     label: 'HOOK!' },
+  hookR: { hand: 'R', cat: 'hook',  pts: 20, dmg: 10, dur: 0.31, kind: 'hook',     label: 'HOOK!' },
+  upper: { hand: 'R', cat: 'upper', pts: 30, dmg: 15, dur: 0.38, kind: 'upper',    label: 'UPPERCUT!!' },
+};
+
+/* path targets in camera-local space */
+function punchPath(def, side, k){ // k: 0..1 extension
+  const g = GUARD[def.hand].p;
+  const out = new THREE.Vector3();
+  if (def.kind === 'straight'){
+    out.set(side * 0.07, -0.02, -2.1);
+    return out.lerpVectors(g, out, k);
+  }
+  if (def.kind === 'hook'){
+    const ctrl = new THREE.Vector3(side * 1.05, -0.12, -1.15);
+    const end  = new THREE.Vector3(-side * 0.06, 0.0, -1.95);
+    const a = new THREE.Vector3().lerpVectors(g, ctrl, k);
+    const b = new THREE.Vector3().lerpVectors(ctrl, end, k);
+    return out.lerpVectors(a, b, k);
+  }
+  // uppercut
+  const ctrl = new THREE.Vector3(side * 0.34, -1.05, -1.15);
+  const end  = new THREE.Vector3(side * 0.05, 0.12, -1.9);
+  const a = new THREE.Vector3().lerpVectors(g, ctrl, k);
+  const b = new THREE.Vector3().lerpVectors(ctrl, end, k);
+  return out.lerpVectors(a, b, k);
+}
+
+const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
+const easeInOut = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+/* glove animation state */
+const gloves = {
+  L: { mesh: gloveL, t: -1, def: null, hitDone: false },
+  R: { mesh: gloveR, t: -1, def: null, hitDone: false },
+};
+
+function throwPunch(name){
+  if (!state.playing) return;
+  const def = PUNCHES[name];
+  if (!def) return;
+  const gl = gloves[def.hand];
+  if (gl.t >= 0 && gl.t < 0.55) return;  // hand still busy
+  gl.t = 0; gl.def = def; gl.hitDone = false;
+  playWhoosh();
+}
+
+/* ---------------- physics: dummy springs ---------------- */
+const sim = {
+  tx: 0, vtx: 0,    // tilt back/forward
+  tz: 0, vtz: 0,    // tilt sideways
+  ry: 0, vry: 0,    // spin
+  sy: 0, vsy: 0,    // squash (0 = rest)
+  py: 0, vpy: 0,    // vertical hop (rocket launch)
+  hx: 0, vhx: 0, hz: 0, vhz: 0, // head jiggle
+};
+
+function springs(dt){
+  const koDown = state.koT > 0 && state.koT < 1.5;
+  const targetTX = koDown ? -1.35 : 0;
+  const k = koDown ? 26 : 38, c = koDown ? 5.5 : 3.6;
+
+  sim.vtx += (-k * (sim.tx - targetTX) - c * sim.vtx) * dt;
+  sim.vtz += (-k * sim.tz - c * sim.vtz) * dt;
+  sim.vry += (-20 * sim.ry - 3.2 * sim.vry) * dt;
+  sim.vsy += (-90 * sim.sy - 6 * sim.vsy) * dt;
+  sim.vpy += (-55 * sim.py - 5 * sim.vpy) * dt;
+  sim.vhx += (-70 * sim.hx - 4 * sim.vhx) * dt;
+  sim.vhz += (-70 * sim.hz - 4 * sim.vhz) * dt;
+
+  sim.tx += sim.vtx * dt; sim.tz += sim.vtz * dt;
+  sim.ry += sim.vry * dt; sim.sy += sim.vsy * dt;
+  sim.py += sim.vpy * dt;
+  sim.hx += sim.vhx * dt; sim.hz += sim.vhz * dt;
+  if (sim.py < -0.04){ sim.py = -0.04; sim.vpy *= -0.4; }
+
+  if (!koDown){
+    const LIM = 0.8;
+    if (sim.tx < -LIM){ sim.tx = -LIM; sim.vtx *= -0.45; }
+    if (sim.tx >  LIM){ sim.tx =  LIM; sim.vtx *= -0.45; }
+    if (sim.tz < -LIM){ sim.tz = -LIM; sim.vtz *= -0.45; }
+    if (sim.tz >  LIM){ sim.tz =  LIM; sim.vtz *= -0.45; }
+  }
+  sim.sy = Math.max(-0.45, Math.min(0.35, sim.sy));
+
+  dummy.rotation.set(sim.tx, sim.ry, sim.tz);
+  dummy.position.y = sim.py;
+  dummy.scale.y = 1 + sim.sy;
+  dummy.scale.x = dummy.scale.z = 1 - sim.sy * 0.4;
+  headG.rotation.set(sim.hx, 0, sim.hz);
+}
+
+/* ---------------- game state ---------------- */
+const state = {
+  playing: false,
+  score: 0,
+  hi: +(localStorage.getItem('pukulaja_hi') || 0),
+  combo: 0, comboTimer: 0,
+  hp: 100, hpMax: 100,
+  round: 1,
+  koT: 0,
+  shake: 0,
+  freeze: 0,
+};
+$('hiscore').textContent = state.hi;
+
+function setScore(v){
+  state.score = v;
+  $('score').textContent = v.toLocaleString();
+  if (v > state.hi){
+    state.hi = v;
+    localStorage.setItem('pukulaja_hi', v);
+    $('hiscore').textContent = v.toLocaleString();
+  }
+}
+function setHP(v){
+  state.hp = Math.max(0, v);
+  $('hpFill').style.width = (state.hp / state.hpMax * 100) + '%';
+}
+
+/* head position → screen coords for popups */
+const _v = new THREE.Vector3();
+function headScreenPos(){
+  headG.getWorldPosition(_v);
+  _v.project(camera);
+  return {
+    x: (_v.x * 0.5 + 0.5) * innerWidth,
+    y: (-_v.y * 0.5 + 0.5) * innerHeight,
+  };
+}
+
+function popup(text, cls = ''){
+  const p = headScreenPos();
+  const el = document.createElement('div');
+  el.className = 'dmg ' + cls;
+  el.style.setProperty('--rot', ((Math.random() - 0.5) * 24).toFixed(1) + 'deg');
+  el.style.left = (p.x + (Math.random() - 0.5) * 120) + 'px';
+  el.style.top  = (p.y - 40 + (Math.random() - 0.5) * 50) + 'px';
+  el.textContent = text;
+  $('fx').appendChild(el);
+  setTimeout(() => el.remove(), 850);
+}
+function stamp(text){
+  const p = headScreenPos();
+  const el = document.createElement('div');
+  el.className = 'stamp';
+  el.style.setProperty('--rot', ((Math.random() - 0.5) * 16).toFixed(1) + 'deg');
+  el.style.left = (p.x + (Math.random() - 0.5) * 180) + 'px';
+  el.style.top  = (p.y + 90) + 'px';
+  el.textContent = text;
+  $('fx').appendChild(el);
+  setTimeout(() => el.remove(), 600);
+}
+function flash(op = 0.5, ms = 90){
+  const f = $('flash');
+  f.style.transition = 'none';
+  f.style.opacity = op;
+  requestAnimationFrame(() => {
+    f.style.transition = `opacity ${ms}ms ease-out`;
+    f.style.opacity = 0;
+  });
+}
+
+/* ---------------- particles ---------------- */
+const PART_GEO = new THREE.TetrahedronGeometry(0.035);
+const PART_MATS = [0xf2b418, 0xf4ead6, 0xe03616, 0xff7b3a].map(c =>
+  new THREE.MeshBasicMaterial({ color: c }));
+const partPool = [];
+const liveParts = [];
+
+function spawnBurst(n, power){
+  headG.getWorldPosition(_v);
+  for (let i = 0; i < n; i++){
+    let m = partPool.pop();
+    if (!m){
+      m = new THREE.Mesh(PART_GEO, PART_MATS[(Math.random() * PART_MATS.length) | 0]);
+      scene.add(m);
+    }
+    m.visible = true;
+    m.position.set(_v.x, _v.y, _v.z + 0.25);
+    m.userData.vel = new THREE.Vector3(
+      (Math.random() - 0.5) * 3.4 * power,
+      Math.random() * 2.6 * power + 0.6,
+      Math.random() * 2.2 * power + 0.4
+    );
+    m.userData.life = m.userData.maxLife = 0.45 + Math.random() * 0.4;
+    m.userData.spin = (Math.random() - 0.5) * 18;
+    liveParts.push(m);
+  }
+}
+function updateParts(dt){
+  for (let i = liveParts.length - 1; i >= 0; i--){
+    const m = liveParts[i];
+    m.userData.life -= dt;
+    if (m.userData.life <= 0){
+      m.visible = false;
+      partPool.push(m);
+      liveParts.splice(i, 1);
+      continue;
+    }
+    m.userData.vel.y -= 7 * dt;
+    m.position.addScaledVector(m.userData.vel, dt);
+    m.rotation.x += m.userData.spin * dt;
+    m.rotation.z += m.userData.spin * 0.7 * dt;
+    const s = Math.max(0.05, m.userData.life / m.userData.maxLife);
+    m.scale.setScalar(s);
+  }
+}
+
+/* shockwave rings (special moves) */
+const waves = [];
+function spawnShockwave(color = 0xf2b418){
+  const m = new THREE.Mesh(
+    new THREE.RingGeometry(0.3, 0.42, 40),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95,
+      side: THREE.DoubleSide, depthWrite: false })
+  );
+  headG.getWorldPosition(_v);
+  m.position.set(_v.x, _v.y, _v.z + 0.32);
+  m.lookAt(camera.position);
+  m.userData.life = m.userData.maxLife = 0.55;
+  scene.add(m); waves.push(m);
+}
+function updateWaves(dt){
+  for (let i = waves.length - 1; i >= 0; i--){
+    const m = waves[i];
+    m.userData.life -= dt;
+    if (m.userData.life <= 0){
+      scene.remove(m); m.geometry.dispose(); m.material.dispose();
+      waves.splice(i, 1); continue;
+    }
+    const p = 1 - m.userData.life / m.userData.maxLife;
+    m.scale.setScalar(1 + p * 7);
+    m.material.opacity = 0.95 * (1 - p);
+  }
+}
+
+/* ---------------- hit resolution ---------------- */
+function comboMult(){ return Math.min(1 + Math.floor(state.combo / 5), 5); }
+
+/* special move combos — sequence of punch categories */
+const SPECIALS = [
+  { pat: ['hook', 'hook', 'jab'],   name: '💥 DYNAMITE!', pts: 200, dmg: 25, fx: 'explode' },
+  { pat: ['jab', 'cross', 'upper'], name: '🚀 ROCKET!',   pts: 250, dmg: 30, fx: 'launch' },
+  { pat: ['cross', 'cross', 'hook'],name: '🌪 TORNADO!',  pts: 150, dmg: 20, fx: 'tornado' },
+];
+const seq = [];
+
+function specialBanner(text){
+  const el = document.createElement('div');
+  el.className = 'special-banner';
+  el.textContent = text;
+  $('fx').appendChild(el);
+  setTimeout(() => el.remove(), 1000);
+}
+
+function triggerSpecial(sp){
+  const pts = sp.pts * comboMult();
+  setScore(state.score + pts);
+  specialBanner(sp.name + ' +' + pts);
+  state.freeze = 0.09;
+  state.shake += 0.06;
+  flash(0.45, 180);
+  playBoom();
+  spawnBurst(34, 2.2);
+  spawnShockwave(0xf2b418);
+  setTimeout(() => spawnShockwave(0xe03616), 90);
+  if (sp.fx === 'explode'){ sim.vtx -= 5; sim.vsy += 1.6; sim.vhx -= 8; }
+  else if (sp.fx === 'launch'){ sim.vpy += 3.4; sim.vtx -= 3; sim.vhx -= 10; }
+  else { sim.vry += 30; sim.vtz += 2.5; }
+  setHP(state.hp - sp.dmg);
+  if (state.hp <= 0) knockout();
+}
+
+function landHit(def){
+  if (state.koT > 0) return;
+
+  // dummy reaction
+  const side = def.hand === 'L' ? 1 : -1;
+  if (def.kind === 'straight'){
+    sim.vtx -= 2.4; sim.vtz += side * 0.5;
+    sim.vhx -= 4.5;
+  } else if (def.kind === 'hook'){
+    sim.vtz += side * 3.4; sim.vry += side * 7.5; sim.vtx -= 0.9;
+    sim.vhz += side * 7;
+    state.freeze = 0.04;
+  } else { // upper
+    sim.vsy += 2.6; sim.vtx -= 1.8; sim.vhx -= 9;
+    state.freeze = 0.055;
+  }
+
+  // combo & score
+  state.combo++;
+  state.comboTimer = 1.4;
+  const mult = comboMult();
+  const crit = state.combo > 0 && state.combo % 10 === 0;
+  const pts = def.pts * mult * (crit ? 2 : 1);
+  setScore(state.score + pts);
+
+  const cEl = $('combo');
+  if (state.combo >= 3){
+    cEl.textContent = state.combo + ' COMBO  ×' + mult;
+    cEl.classList.add('show');
+    cEl.classList.remove('pop'); void cEl.offsetWidth; cEl.classList.add('pop');
+  }
+
+  // feedback
+  popup('+' + pts, crit ? 'crit' : (def.kind !== 'straight' ? 'big' : ''));
+  if (crit){ stamp('CRITICAL!'); flash(0.35, 130); }
+  else if (Math.random() < 0.3) stamp(def.label);
+
+  state.shake += def.kind === 'straight' ? 0.012 : def.kind === 'hook' ? 0.022 : 0.032;
+  spawnBurst(def.kind === 'straight' ? 6 : def.kind === 'hook' ? 10 : 16,
+             def.kind === 'upper' ? 1.5 : 1);
+  playThud(def.kind === 'upper' ? 1.3 : 1, def.kind === 'hook' ? 1.25 : 1);
+
+  // damage
+  setHP(state.hp - def.dmg);
+  if (state.hp <= 0){ knockout(); return; }
+
+  // special move detection (suffix match on recent punch categories)
+  seq.push(def.cat);
+  if (seq.length > 6) seq.shift();
+  for (const sp of SPECIALS){
+    const n = sp.pat.length;
+    if (seq.length >= n && sp.pat.every((p, i) => seq[seq.length - n + i] === p)){
+      seq.length = 0;
+      triggerSpecial(sp);
+      break;
+    }
+  }
+}
+
+function knockout(){
+  state.koT = 2.6;
+  state.shake += 0.05;
+  const bonus = 500 * state.round;
+  setScore(state.score + bonus);
+  sim.vry += 26; sim.vtx -= 8;
+  flash(0.6, 200);
+  playBell();
+  spawnBurst(40, 2.2);
+  $('koBanner').querySelector('.ko-sub').textContent = '+' + bonus.toLocaleString() + ' BONUS — ROUND ' + (state.round + 1);
+  $('koBanner').classList.add('show');
+  setTimeout(() => $('koBanner').classList.remove('show'), 1900);
+}
+
+/* ---------------- main loop ---------------- */
+let lastT = performance.now();
+let camKick = 0; // camera lunge when punching
+
+function tick(now){
+  requestAnimationFrame(tick);
+  let dt = Math.min((now - lastT) / 1000, 0.05);
+  lastT = now;
+
+  if (state.freeze > 0){ state.freeze -= dt; dt = 0.0001; } // hit-stop
+
+  const t = now / 1000;
+
+  // glove idle sway + punch anims
+  for (const hand of ['L', 'R']){
+    const gl = gloves[hand];
+    const side = hand === 'L' ? -1 : 1;
+    const guard = GUARD[hand];
+    if (gl.t >= 0){
+      gl.t += dt / gl.def.dur;
+      if (gl.t >= 1){
+        gl.t = -1;
+        gl.mesh.position.copy(guard.p);
+        gl.mesh.rotation.copy(guard.r);
+      } else {
+        const CONTACT = 0.42;
+        let k;
+        if (gl.t < CONTACT) k = easeOutCubic(gl.t / CONTACT);
+        else k = 1 - easeInOut((gl.t - CONTACT) / (1 - CONTACT));
+        gl.mesh.position.copy(punchPath(gl.def, side, k));
+        gl.mesh.rotation.set(
+          guard.r.x * (1 - k) + (gl.def.kind === 'upper' ? 1.3 : -0.2) * k,
+          guard.r.y * (1 - k) + (gl.def.kind === 'hook' ? side * 1.2 : 0) * k,
+          guard.r.z * (1 - k)
+        );
+        if (!gl.hitDone && gl.t >= CONTACT){
+          gl.hitDone = true;
+          camKick = 0.045;
+          landHit(gl.def);
+        }
+      }
+    } else {
+      // breathing guard
+      const ph = hand === 'L' ? 0 : 1.4;
+      gl.mesh.position.x = guard.p.x + Math.sin(t * 1.7 + ph) * 0.015;
+      gl.mesh.position.y = guard.p.y + Math.sin(t * 2.3 + ph) * 0.018;
+      gl.mesh.position.z = guard.p.z + Math.sin(t * 1.1 + ph) * 0.008;
+    }
+  }
+
+  // physics
+  springs(dt);
+  updateParts(dt);
+  updateWaves(dt);
+
+  // combo decay
+  if (state.comboTimer > 0){
+    state.comboTimer -= dt;
+    if (state.comboTimer <= 0){
+      state.combo = 0;
+      seq.length = 0;
+      $('combo').classList.remove('show');
+    }
+  }
+
+  // KO timer / next round
+  if (state.koT > 0){
+    state.koT -= dt;
+    if (state.koT <= 0){
+      state.round++;
+      $('round').textContent = state.round;
+      state.hpMax = Math.round(100 * (1 + (state.round - 1) * 0.25));
+      setHP(state.hpMax);
+    }
+  }
+
+  // camera: idle sway + punch lunge + shake
+  camKick = Math.max(0, camKick - dt * 0.3);
+  state.shake *= Math.exp(-7 * dt);
+  camera.position.set(
+    CAM_POS.x + Math.sin(t * 0.6) * 0.022 + (Math.random() - 0.5) * state.shake * 14,
+    CAM_POS.y + Math.sin(t * 1.1) * 0.014 + (Math.random() - 0.5) * state.shake * 14,
+    CAM_POS.z - camKick * 3
+  );
+
+  // lamp sway
+  lamp.rotation.z = Math.sin(t * 0.7) * 0.04;
+  lamp.rotation.x = Math.sin(t * 0.53) * 0.03;
+
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(tick);
+
+/* ---------------- input: keyboard ---------------- */
+let flurryAlt = false;
+addEventListener('keydown', e => {
+  if (!state.playing) return;
+  if (e.repeat && e.code !== 'Space') return;
+  switch (e.code){
+    case 'KeyJ': case 'ArrowLeft':  throwPunch('jabL');  break;
+    case 'KeyK': case 'ArrowRight': throwPunch('jabR');  break;
+    case 'KeyH':                    throwPunch('hookL'); break;
+    case 'KeyL':                    throwPunch('hookR'); break;
+    case 'KeyU': case 'ArrowUp':    throwPunch('upper'); break;
+    case 'Space':
+      e.preventDefault();
+      throwPunch((flurryAlt = !flurryAlt) ? 'jabL' : 'jabR');
+      break;
+    case 'KeyC': showStart(); break;
+  }
+});
+
+/* mouse / tap on the arena = alternating jab–cross */
+let clickAlt = false;
+$('game').addEventListener('pointerdown', e => {
+  if (!state.playing) return;
+  audioInit();
+  if (e.pointerType === 'mouse' && e.button === 2) { throwPunch('jabR'); return; }
+  throwPunch((clickAlt = !clickAlt) ? 'jabR' : 'jabL');
+});
+addEventListener('contextmenu', e => { if (state.playing) e.preventDefault(); });
+
+/* ---------------- input: touch d-pad + action buttons ---------------- */
+if (matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window){
+  document.body.classList.add('touch');
+}
+document.querySelectorAll('[data-punch]').forEach(b => {
+  b.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    audioInit();
+    if (AC && AC.state === 'suspended') AC.resume();
+    throwPunch(b.dataset.punch);
+  });
+});
+
+/* ---------------- start screen / photo upload ---------------- */
+const dropzone = $('dropzone'), fileInput = $('fileInput');
+let uploadedImg = null;
+
+function handleFile(file){
+  if (!file || !file.type.startsWith('image/')) return;
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    uploadedImg = img;
+    $('facePreview').src = url;
+    dropzone.classList.add('has-photo');
+    $('dzTitle').textContent = 'TARGET ACQUIRED';
+    $('dzSub').textContent = 'tap to swap the photo';
+    $('fightBtn').disabled = false;
+  };
+  img.src = url;
+}
+dropzone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
+['dragover', 'dragenter'].forEach(ev => dropzone.addEventListener(ev, e => {
+  e.preventDefault(); dropzone.classList.add('drag');
+}));
+['dragleave', 'drop'].forEach(ev => dropzone.addEventListener(ev, e => {
+  e.preventDefault(); dropzone.classList.remove('drag');
+}));
+dropzone.addEventListener('drop', e => handleFile(e.dataTransfer.files[0]));
+
+function startFight(name){
+  audioInit();
+  if (AC && AC.state === 'suspended') AC.resume();
+  $('oppName').textContent = name;
+  $('start').style.display = 'none';
+  document.body.classList.add('playing');
+  state.playing = true;
+  setHP(state.hpMax);
+  playBell();
+}
+$('fightBtn').addEventListener('click', () => {
+  if (uploadedImg) buildFaceTexture(uploadedImg);
+  startFight('Your Nemesis');
+});
+$('dummyBtn').addEventListener('click', () => {
+  buildFaceTexture(defaultFaceCanvas());
+  startFight('Practice Dummy');
+});
+function showStart(){
+  state.playing = false;
+  document.body.classList.remove('playing');
+  $('start').style.display = 'flex';
+}
+$('changePhoto').addEventListener('click', showStart);
+</script>
+</body>
+</html>
