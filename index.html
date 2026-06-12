@@ -71,6 +71,21 @@
   .big-btn.primary{background:var(--red);color:var(--cream)}
   .big-btn:disabled{opacity:.35;cursor:not-allowed}
 
+  /* level selector */
+  .level-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:18px}
+  .lvl-btn{font-family:var(--display);font-size:20px;letter-spacing:.06em;cursor:pointer;
+    border:3px solid var(--ink);padding:10px 24px 8px;text-transform:uppercase;
+    box-shadow:4px 4px 0 var(--ink);transition:all .12s;background:var(--cream-dim);color:var(--ink)}
+  .lvl-btn:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 var(--ink)}
+  .lvl-btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink)}
+  .lvl-btn.selected{transform:rotate(-1.5deg) translate(-2px,-2px);box-shadow:6px 6px 0 var(--ink)}
+  .lvl-btn[data-level="easy"].selected{background:#46c26b;color:#fff}
+  .lvl-btn[data-level="medium"].selected{background:var(--gold);color:var(--ink)}
+  .lvl-btn[data-level="hard"].selected{background:var(--red);color:var(--cream)}
+  .lvl-badge{font-size:13px;letter-spacing:.06em;opacity:.75;display:block;font-family:var(--body);
+    font-weight:700;text-transform:uppercase;margin-top:2px}
+  #levelDisplay{position:absolute;top:14px;right:14px;z-index:1;pointer-events:none}
+
   .controls-card{margin:34px auto 0;width:min(520px,90vw);border:3px solid var(--ink);
     background:var(--cream-dim);padding:14px 18px 18px;transform:rotate(-.5deg);
     box-shadow:6px 6px 0 rgba(22,17,13,.25)}
@@ -122,6 +137,11 @@
     box-shadow:4px 4px 0 rgba(0,0,0,.5);padding:5px 14px 7px;transform:rotate(1.4deg);text-align:center}
   .round-plate .lbl{font-size:11px;font-weight:700;letter-spacing:.3em;color:var(--ink);text-transform:uppercase}
   #round{font-family:var(--display);font-size:30px;line-height:1;color:var(--ink)}
+  #levelBadge{font-size:11px;font-weight:700;letter-spacing:.22em;text-transform:uppercase;
+    margin-top:2px;padding:1px 6px;border:2px solid var(--ink);display:inline-block}
+  #levelBadge.easy{background:#46c26b;color:#fff}
+  #levelBadge.medium{background:var(--gold);color:var(--ink)}
+  #levelBadge.hard{background:var(--red);color:var(--cream)}
 
   #keysbar{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);
     background:rgba(12,10,16,.72);border:2px solid rgba(244,234,214,.25);border-radius:8px;
@@ -239,7 +259,7 @@
     <div class="hp-name" id="oppName">The Opponent</div>
     <div class="hp-bar"><div id="hpFill"></div></div>
   </div>
-  <div class="round-plate"><div class="lbl">Round</div><div id="round">1</div></div>
+  <div class="round-plate"><div class="lbl">Round</div><div id="round">1</div><div id="levelBadge" class="medium">MED</div></div>
 
   <div id="keysbar">
     <b>J</b> jab &nbsp; <b>K</b> cross &nbsp; <b>H</b> hook L &nbsp; <b>L</b> hook R &nbsp; <b>U</b> uppercut &nbsp; <b>SPACE</b> flurry &nbsp;·&nbsp; or click to punch
@@ -277,6 +297,11 @@
       <input type="file" id="fileInput" accept="image/*" hidden>
     </div>
 
+    <div class="level-row">
+      <button class="lvl-btn" data-level="easy">Easy<span class="lvl-badge">No dodge · +20% dmg</span></button>
+      <button class="lvl-btn selected" data-level="medium">Medium<span class="lvl-badge">Balanced</span></button>
+      <button class="lvl-btn" data-level="hard">Hard<span class="lvl-badge">Dummy dodges!</span></button>
+    </div>
     <div class="btn-row">
       <button class="big-btn primary" id="fightBtn" disabled>FIGHT! 🥊</button>
       <button class="big-btn" id="dummyBtn">Use practice dummy</button>
@@ -748,8 +773,9 @@ function throwPunch(name){
   if (!def) return;
   const gl = gloves[def.hand];
   if (gl.t >= 0 && gl.t < 0.55) return;  // hand still busy
-  gl.t = 0; gl.def = def; gl.hitDone = false;
+  gl.t = 0; gl.def = def; gl.hitDone = false; gl.dodged = false;
   playWhoosh();
+  vibrate(def.kind === 'straight' ? 18 : def.kind === 'hook' ? 35 : 55);
 }
 
 /* ---------------- physics: dummy springs ---------------- */
@@ -797,6 +823,18 @@ function springs(dt){
   headG.rotation.set(sim.hx, 0, sim.hz);
 }
 
+/* ---------------- haptic helper ---------------- */
+function vibrate(pattern){
+  if (navigator.vibrate) navigator.vibrate(pattern);
+}
+
+/* level config table */
+const LEVELS = {
+  easy:   { label: 'EASY', badge: 'easy',   dmgMult: 1.4, dodgeChance: 0,    dodgeCooldown: 999, hpMult: 0.8  },
+  medium: { label: 'MED',  badge: 'medium', dmgMult: 1.0, dodgeChance: 0,    dodgeCooldown: 999, hpMult: 1.0  },
+  hard:   { label: 'HARD', badge: 'hard',   dmgMult: 0.8, dodgeChance: 0.32, dodgeCooldown: 1.6, hpMult: 1.25 },
+};
+
 /* ---------------- game state ---------------- */
 const state = {
   playing: false,
@@ -808,6 +846,8 @@ const state = {
   koT: 0,
   shake: 0,
   freeze: 0,
+  level: 'medium',
+  dodgeCooldown: 0,   // seconds until dummy can dodge again
 };
 $('hiscore').textContent = state.hi;
 
@@ -1020,9 +1060,12 @@ function landHit(def){
   spawnBurst(def.kind === 'straight' ? 6 : def.kind === 'hook' ? 10 : 16,
              def.kind === 'upper' ? 1.5 : 1);
   playThud(def.kind === 'upper' ? 1.3 : 1, def.kind === 'hook' ? 1.25 : 1);
+  // haptic feedback on landed hit
+  vibrate(def.kind === 'straight' ? 30 : def.kind === 'hook' ? [50, 20, 50] : [80, 30, 80]);
 
-  // damage
-  setHP(state.hp - def.dmg);
+  // damage (scaled by level)
+  const dmgFinal = Math.round(def.dmg * LEVELS[state.level].dmgMult);
+  setHP(state.hp - dmgFinal);
   if (state.hp <= 0){ knockout(); return; }
 
   // special move detection (suffix match on recent punch categories)
@@ -1046,6 +1089,7 @@ function knockout(){
   sim.vry += 26; sim.vtx -= 8;
   flash(0.6, 200);
   playBell();
+  vibrate([120, 60, 120, 60, 300]);
   spawnBurst(40, 2.2);
   $('koBanner').querySelector('.ko-sub').textContent = '+' + bonus.toLocaleString() + ' BONUS — ROUND ' + (state.round + 1);
   $('koBanner').classList.add('show');
@@ -1087,10 +1131,33 @@ function tick(now){
           guard.r.y * (1 - k) + (gl.def.kind === 'hook' ? side * 1.2 : 0) * k,
           guard.r.z * (1 - k)
         );
-        if (!gl.hitDone && gl.t >= CONTACT){
+        if (!gl.hitDone && !gl.dodged && gl.t >= CONTACT){
           gl.hitDone = true;
-          camKick = 0.045;
-          landHit(gl.def);
+          // hard mode dodge: only on straight punches, with cooldown
+          const lv = LEVELS[state.level];
+          if (lv.dodgeChance > 0 && state.dodgeCooldown <= 0 && Math.random() < lv.dodgeChance){
+            // dummy sidesteps — pick a random direction
+            const dodgeDir = Math.random() < 0.5 ? 1 : -1;
+            sim.vtz += dodgeDir * 5.5;
+            sim.vry += dodgeDir * 12;
+            state.dodgeCooldown = lv.dodgeCooldown;
+            gl.dodged = true;
+            // DODGE popup
+            const p = headScreenPos();
+            const el = document.createElement('div');
+            el.className = 'dmg big';
+            el.style.setProperty('--rot', ((Math.random() - 0.5) * 18).toFixed(1) + 'deg');
+            el.style.left = (p.x + (Math.random() - 0.5) * 90) + 'px';
+            el.style.top  = (p.y - 20) + 'px';
+            el.textContent = 'DODGE!';
+            el.style.color = 'var(--cream)';
+            $('fx').appendChild(el);
+            setTimeout(() => el.remove(), 850);
+            vibrate([30, 20, 60]); // different pattern — tells you it dodged
+          } else {
+            camKick = 0.045;
+            landHit(gl.def);
+          }
         }
       }
     } else {
@@ -1117,13 +1184,17 @@ function tick(now){
     }
   }
 
+  // dodge cooldown
+  if (state.dodgeCooldown > 0) state.dodgeCooldown -= dt;
+
   // KO timer / next round
   if (state.koT > 0){
     state.koT -= dt;
     if (state.koT <= 0){
       state.round++;
       $('round').textContent = state.round;
-      state.hpMax = Math.round(100 * (1 + (state.round - 1) * 0.25));
+      const lv = LEVELS[state.level];
+      state.hpMax = Math.round(100 * lv.hpMult * (1 + (state.round - 1) * 0.25));
       setHP(state.hpMax);
     }
   }
@@ -1221,9 +1292,22 @@ function startFight(name){
   $('oppName').textContent = name;
   $('start').style.display = 'none';
   document.body.classList.add('playing');
+  // apply level config
+  const lv = LEVELS[state.level];
+  state.hpMax = Math.round(100 * lv.hpMult);
+  state.dodgeCooldown = 0;
+  state.round = 1;
+  state.score = 0; setScore(0);
+  state.combo = 0; seq.length = 0;
+  $('round').textContent = '1';
+  $('combo').classList.remove('show');
+  const badge = $('levelBadge');
+  badge.textContent = lv.label;
+  badge.className = lv.badge;
   state.playing = true;
   setHP(state.hpMax);
   playBell();
+  vibrate([40, 30, 40, 30, 80]);  // fight start buzz
 }
 $('fightBtn').addEventListener('click', () => {
   if (uploadedImg) buildFaceTexture(uploadedImg);
@@ -1239,6 +1323,15 @@ function showStart(){
   $('start').style.display = 'flex';
 }
 $('changePhoto').addEventListener('click', showStart);
+
+/* level selector */
+document.querySelectorAll('.lvl-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.lvl-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    state.level = btn.dataset.level;
+  });
+});
 </script>
 </body>
 </html>
