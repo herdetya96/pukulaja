@@ -55,3 +55,8 @@ Special bonuses are multiplied by your current combo multiplier.
 ## Privacy
 Uploaded photos never leave the browser — they're drawn onto a canvas texture
 in memory and nothing is stored or transmitted.
+
+## Also in this repo
+
+[`v12/`](v12/) is a separate page: an interactive 3D V12 engine showcase built
+in three.js. See [`v12/README.md`](v12/README.md).

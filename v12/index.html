@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!--page-->
+<title>Tipo 600 V12</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* Layout: one full-bleed 3D stage. Instrument panels float over it: configure on the
+   left, telemetry on the right, the drive rail along the bottom. On a phone the stage
+   takes the top of the screen and the three panels become a tabbed sheet below it. */
+:root{
+  color-scheme:dark;
+  --bg:#0a0b0d;
+  --surface:rgba(17,19,23,.76);
+  --surface-solid:#111317;
+  --raise:rgba(236,232,224,.06);
+  --line:rgba(236,232,224,.11);
+  --line-strong:rgba(236,232,224,.24);
+  --fg:#ece8e0;
+  --fg-2:#a9a8a3;
+  --fg-3:#73757a;
+  --amber:#ffb454;      /* instrument illumination: every live value */
+  --hot:#ff5b2e;        /* power stroke, redline */
+  --cool:#69b4ff;       /* intake */
+  --violet:#b592ff;     /* compression */
+  --spent:#8b9099;      /* exhaust */
+  --f-display:'Syncopate','Eurostile','Arial Black',system-ui,sans-serif;
+  --f-body:'Hanken Grotesk',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --f-mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  --gl:max(16px,env(safe-area-inset-left,0px));
+  --gr:max(16px,env(safe-area-inset-right,0px));
+  --r:10px;
+  --side-l:268px;
+  --side-r:296px;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font:400 13px/1.45 var(--f-body);overflow:hidden;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:0;padding:0}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-radius:4px}
+h1,h2,h3,p,dl,dd,ul{margin:0;padding:0}
+ul{list-style:none}
+
+#app{position:relative;height:100%;overflow:hidden;background:var(--bg)}
+#stage{position:absolute;inset:0;touch-action:none}
+#stage canvas{display:block;width:100%;height:100%;outline:none}
+#stage::after{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(120% 90% at 50% 42%,transparent 55%,rgba(4,5,6,.55) 100%)}
+
+.label{font:500 10px/1.2 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--fg-3)}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  -webkit-backdrop-filter:blur(18px) saturate(1.25);backdrop-filter:blur(18px) saturate(1.25)}
+
+/* ---------- top bar ---------- */
+#top{position:absolute;z-index:5;top:0;left:0;right:0;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;
+  padding:14px var(--gr) 0 var(--gl);pointer-events:none}
+#top>*{pointer-events:auto}
+.plate{display:flex;flex-direction:column;gap:5px;min-width:0}
+.plate h1{font:700 17px/1 var(--f-display);letter-spacing:.3em;white-space:nowrap}
+.plate h1 span{color:var(--amber)}
+.plate p{font:400 10.5px/1.2 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--fg-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seg{display:inline-flex;padding:3px;gap:2px;border-radius:999px;background:var(--surface);border:1px solid var(--line);
+  -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px)}
+.seg button{padding:7px 15px;border-radius:999px;font:500 11px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--fg-2);white-space:nowrap;transition:color .15s,background .15s}
+.seg button:hover{color:var(--fg)}
+.seg button[aria-pressed="true"]{background:var(--fg);color:#0b0c0e}
+.seg.small button{padding:6px 10px;font-size:10.5px;letter-spacing:.06em}
+.tools{display:flex;justify-content:flex-end;gap:6px}
+.tool{width:34px;height:34px;display:grid;place-items:center;border-radius:50%;background:var(--surface);border:1px solid var(--line);color:var(--fg-2);
+  -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);transition:color .15s,border-color .15s}
+.tool:hover{color:var(--fg);border-color:var(--line-strong)}
+.tool[aria-pressed="true"]{color:var(--amber);border-color:rgba(255,180,84,.5)}
+.tool svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- panes ---------- */
+#dock{display:contents}
+#tabs{display:none}
+.pane{position:absolute;z-index:4;transition:opacity .25s,transform .25s}
+#pane-config{left:var(--gl);top:74px;bottom:138px;width:var(--side-l);overflow:auto;padding:14px 14px 10px}
+#pane-data{right:var(--gr);top:74px;bottom:138px;width:var(--side-r);overflow:auto;padding:14px}
+#pane-drive{left:50%;bottom:16px;transform:translateX(-50%);width:min(900px,calc(100% - var(--gl) - var(--gr)));padding:12px 16px}
+.clean .pane,.clean #views,.clean #partcard,.clean #callouts{opacity:0;pointer-events:none}
+.pane::-webkit-scrollbar{width:6px}.pane::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:3px}
+.pane h2{font:700 9.5px/1 var(--f-display);letter-spacing:.26em;text-transform:uppercase;color:var(--fg-2);padding:4px 0 10px;display:flex;justify-content:space-between;align-items:center}
+.pane h2:not(:first-child){margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.pane h2 button{font:500 10px/1 var(--f-mono);letter-spacing:.08em;color:var(--fg-3);text-transform:uppercase}
+.pane h2 button:hover{color:var(--amber)}
+
+/* finish */
+.fin{display:grid;gap:7px;padding:2px 0 12px}
+.fin-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.fin-head b{font-weight:500;font-size:12.5px}
+.fin-head span{font-size:11.5px;color:var(--fg-2);text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.swatches{display:flex;flex-wrap:wrap;gap:7px}
+.sw{width:26px;height:26px;border-radius:50%;border:1px solid rgba(255,255,255,.22);background:var(--c);position:relative;
+  box-shadow:inset 0 -6px 9px rgba(0,0,0,.35),inset 0 5px 6px rgba(255,255,255,.18)}
+.sw[data-airbox]{background:repeating-conic-gradient(#2a2c31 0 25%,#0d0e10 0 50%) 0 0/8px 8px}
+.sw[aria-pressed="true"]::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:1.5px solid var(--amber)}
+/* layers */
+.layers{display:grid;gap:1px}
+.layers label{display:flex;align-items:center;gap:10px;padding:5px 4px;border-radius:6px;cursor:pointer;font-size:12.5px;color:var(--fg)}
+.layers label:hover{background:var(--raise)}
+.layers input{appearance:none;-webkit-appearance:none;width:26px;height:14px;border-radius:999px;background:rgba(236,232,224,.16);position:relative;flex:none;margin:0;cursor:pointer;transition:background .15s}
+.layers input::after{content:"";position:absolute;top:2px;left:2px;width:10px;height:10px;border-radius:50%;background:var(--fg-2);transition:transform .15s,background .15s}
+.layers input:checked{background:rgba(255,180,84,.35)}
+.layers input:checked::after{transform:translateX(12px);background:var(--amber)}
+.layers input:not(:checked)+span{color:var(--fg-3)}
+
+/* telemetry */
+.tach{position:relative;margin:-4px 0 2px}
+.tach svg{display:block;width:100%;height:auto}
+.tach .read{position:absolute;left:0;right:0;bottom:8%;text-align:center;pointer-events:none}
+.tach .read b{display:block;font:700 30px/1 var(--f-mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.tach .read span{font:500 9.5px/1 var(--f-mono);letter-spacing:.16em;color:var(--fg-3);text-transform:uppercase}
+.outs{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px 0 4px}
+.outs div{min-width:0}
+.outs b{display:block;font:500 19px/1.15 var(--f-mono);font-variant-numeric:tabular-nums;color:var(--amber)}
+.outs b small{font-size:11px;color:var(--fg-2);font-weight:400;margin-left:3px}
+.outs em{font:400 10.5px/1.3 var(--f-mono);font-style:normal;color:var(--fg-3);font-variant-numeric:tabular-nums}
+#chart{display:block;width:100%;height:auto;margin-top:6px}
+#chart text{font:400 8.5px var(--f-mono);fill:var(--fg-3)}
+.cap{font-size:11px;color:var(--fg-3);margin-top:4px}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:9px 10px}
+.stats b{display:block;font:500 13.5px/1.2 var(--f-mono);font-variant-numeric:tabular-nums;margin-top:3px}
+.firing{display:grid;grid-template-columns:repeat(12,1fr);gap:2px}
+.firing i{font:500 10px/1 var(--f-mono);font-style:normal;text-align:center;padding:7px 0;border-radius:3px;background:var(--raise);color:var(--fg-2);
+  box-shadow:inset 0 0 0 100px rgba(255,91,46,calc(var(--k,0)*.92))}
+.firing i.on{color:#160a04}
+.bankrow{display:grid;grid-template-columns:14px repeat(6,1fr);gap:3px;align-items:center;margin-bottom:3px}
+.bankrow>span{font:500 10px var(--f-mono);color:var(--fg-3)}
+.cylc{height:38px;border-radius:4px;background:var(--raise);position:relative;overflow:hidden;border-top:2px solid var(--sc,var(--line))}
+.cylc u{position:absolute;left:3px;right:3px;top:0;height:9px;border-radius:0 0 2px 2px;background:var(--fg-2);text-decoration:none;transform:translateY(var(--y,0px))}
+.cylc s{position:absolute;left:0;right:0;bottom:2px;text-align:center;font:500 9px/1 var(--f-mono);text-decoration:none;color:var(--fg-3)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:8px;font-size:11px;color:var(--fg-2)}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;background:var(--c)}
+.spec{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:12px}
+.spec dt{color:var(--fg-3)}.spec dd{text-align:right;font-family:var(--f-mono);font-size:11.5px;font-variant-numeric:tabular-nums}
+
+/* drive rail */
+.rail{display:grid;grid-template-columns:auto minmax(0,1.25fr) minmax(0,1fr) minmax(0,1fr);gap:10px 22px;align-items:center}
+#ign{grid-row:span 2;width:68px;height:68px;border-radius:50%;border:1px solid var(--line-strong);display:grid;place-content:center;gap:3px;text-align:center;
+  background:radial-gradient(circle at 50% 35%,rgba(236,232,224,.1),rgba(236,232,224,.02));transition:border-color .2s,box-shadow .2s}
+#ign b{font:700 9px/1 var(--f-display);letter-spacing:.18em;margin-right:-.18em}
+#ign span{font:500 8.5px/1 var(--f-mono);letter-spacing:.1em;color:var(--fg-3)}
+#ign[aria-pressed="true"]{border-color:var(--amber);box-shadow:0 0 0 3px rgba(255,180,84,.12),0 0 22px rgba(255,180,84,.2)}
+#ign[aria-pressed="true"] b{color:var(--amber)}
+.grp{display:grid;gap:7px;min-width:0}
+.grp-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.grp-head b{font:500 11.5px/1 var(--f-mono);font-variant-numeric:tabular-nums;color:var(--amber)}
+.grp.row{grid-auto-flow:column;grid-template-columns:auto 1fr;align-items:center;gap:12px}
+.hint{font-size:11.5px;color:var(--fg-3);grid-column:span 2}
+.sec{grid-column:span 2;display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center}
+#app:not([data-mode="section"]) .sec{display:none}
+#app[data-mode="section"] .hint{display:none}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:18px;background:none;margin:0;cursor:pointer;--p:0%}
+input[type=range]::-webkit-slider-runnable-track{height:2px;border-radius:2px;background:linear-gradient(90deg,var(--amber) var(--p),rgba(236,232,224,.2) var(--p))}
+input[type=range]::-moz-range-track{height:2px;border-radius:2px;background:linear-gradient(90deg,var(--amber) var(--p),rgba(236,232,224,.2) var(--p))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--fg);border:0;margin-top:-6px;box-shadow:0 0 0 4px rgba(10,11,13,.6)}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--fg);border:0;box-shadow:0 0 0 4px rgba(10,11,13,.6)}
+input[type=range]:disabled{opacity:.35;cursor:default}
+
+/* views */
+#views{position:absolute;z-index:4;left:50%;bottom:142px;transform:translateX(-50%);display:flex;gap:4px;transition:opacity .25s}
+#views button{padding:6px 11px;border-radius:999px;font:500 10px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--fg-2);border:1px solid transparent;white-space:nowrap}
+#views button:hover{color:var(--fg);border-color:var(--line)}
+
+/* part card */
+#partcard{position:absolute;z-index:6;left:calc(var(--gl) + var(--side-l) + 14px);top:74px;width:300px;padding:14px 16px 14px;transition:opacity .25s}
+#partcard h3{font:600 16px/1.2 var(--f-body);padding-right:26px}
+#partcard .mat{font:400 10.5px/1.4 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--amber);margin-top:4px}
+#partcard p.txt{color:var(--fg-2);margin-top:9px;font-size:12.5px;line-height:1.5}
+#partcard .spec{margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+#partcard .x{position:absolute;top:10px;right:10px;width:24px;height:24px;border-radius:50%;color:var(--fg-2);display:grid;place-items:center;font-size:16px;line-height:1}
+#partcard .x:hover{background:var(--raise);color:var(--fg)}
+.acts{display:flex;gap:6px;margin-top:12px}
+.acts button{padding:7px 12px;border-radius:999px;border:1px solid var(--line-strong);font:500 10px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase}
+.acts button:hover{border-color:var(--amber);color:var(--amber)}
+
+/* callouts */
+#callouts{position:absolute;inset:0;pointer-events:none;overflow:hidden;transition:opacity .25s}
+.co{position:absolute;left:0;top:0;pointer-events:auto;will-change:transform}
+.co::before{content:"";position:absolute;left:-4px;top:-4px;width:8px;height:8px;border-radius:50%;border:1.5px solid var(--amber);background:rgba(10,11,13,.7)}
+.co::after{content:"";position:absolute;left:3px;top:-1px;width:30px;height:1px;background:linear-gradient(90deg,var(--amber),rgba(255,180,84,.25));transform-origin:0 50%;transform:rotate(-38deg)}
+.co b{position:absolute;left:30px;top:-33px;padding:4px 8px;border-radius:4px;background:rgba(12,13,16,.78);border:1px solid var(--line);
+  font:500 9.5px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;color:var(--fg)}
+.co:hover b{border-color:var(--amber);color:var(--amber)}
+#tip{position:absolute;z-index:7;left:0;top:0;pointer-events:none;padding:4px 8px;border-radius:4px;background:rgba(12,13,16,.9);border:1px solid var(--line-strong);
+  font:500 9.5px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
+
+/* veil */
+#veil{position:absolute;inset:0;z-index:20;display:grid;place-content:center;gap:16px;text-align:center;background:var(--bg);transition:opacity .7s ease .1s}
+#veil.done{opacity:0;pointer-events:none}
+#veil h1{font:700 22px/1 var(--f-display);letter-spacing:.34em;margin-right:-.34em}
+#veil p{font:400 10.5px/1.5 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--fg-3);max-width:34ch;margin:0 auto}
+#veil .bar{width:180px;height:2px;margin:0 auto;background:var(--line);overflow:hidden;border-radius:2px}
+#veil .bar::after{content:"";display:block;width:40%;height:100%;background:var(--amber);animation:slide 1.1s ease-in-out infinite alternate}
+@keyframes slide{from{transform:translateX(-30%)}to{transform:translateX(180%)}}
+
+/* ---------- medium ---------- */
+@media (max-width:1180px){
+  :root{--side-l:236px;--side-r:262px}
+  .rail{gap:10px 16px}
+  #partcard{width:264px}
+}
+/* ---------- phone / narrow ---------- */
+@media (max-width:820px){
+  #app{display:flex;flex-direction:column}
+  #top{position:relative;grid-template-columns:1fr auto;padding:10px var(--gr) 8px var(--gl);gap:8px 10px;background:var(--bg)}
+  #top .seg{grid-column:1/-1;grid-row:2;justify-self:stretch;display:grid;grid-template-columns:repeat(3,1fr);background:var(--raise);-webkit-backdrop-filter:none;backdrop-filter:none}
+  .plate h1{font-size:14px}
+  .plate p{font-size:9.5px}
+  .tool{width:32px;height:32px}
+  #tool-clean,#tool-full{display:none}
+  #stage{position:relative;inset:auto;flex:1 1 0;min-height:0}
+  #dock{display:flex;flex-direction:column;flex:0 0 44%;min-height:236px;max-height:380px;background:var(--surface-solid);border-top:1px solid var(--line)}
+  #tabs{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--line);flex:none}
+  #tabs button{padding:11px 4px 10px;font:700 9px/1 var(--f-display);letter-spacing:.22em;color:var(--fg-3);border-bottom:2px solid transparent;margin-bottom:-1px}
+  #tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--amber)}
+  .pane{position:static;display:none;flex:1 1 0;min-height:0;width:auto!important;overflow:auto;border:0;border-radius:0;background:none;
+    -webkit-backdrop-filter:none;backdrop-filter:none;transform:none!important;
+    padding:12px var(--gr) 14px var(--gl)!important}
+  .pane.active{display:block}
+  .rail{grid-template-columns:auto 1fr 1fr;gap:12px 14px}
+  #ign{grid-row:span 2;width:62px;height:62px}
+  .rail .grp:nth-of-type(1){grid-column:span 2}
+  .hint{display:none}
+  .sec{grid-column:1/-1}
+  .rail .grp.row{grid-column:1/-1}
+  #views{left:0;right:0;bottom:8px;transform:none;overflow-x:auto;padding:0 var(--gr) 0 var(--gl);scrollbar-width:none;justify-content:safe center}
+  #views::-webkit-scrollbar{display:none}
+  #views button{background:rgba(12,13,16,.6);border-color:var(--line);padding:7px 11px}
+  #partcard{left:var(--gl);right:var(--gr);top:auto;bottom:46px;width:auto;max-height:58%;overflow:auto;padding:12px 14px}
+  #partcard .spec{display:none}
+  #partcard p.txt{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  #partcard h3{font-size:15px}
+  #pane-data{max-width:none}
+  .tach{max-width:300px;margin-inline:auto}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+<!--/page-->
+</head>
+<body>
+<!--page-->
+<div id="app" data-mode="studio">
+  <div id="veil">
+    <h1>TIPO 600</h1>
+    <div class="bar"></div>
+    <p id="veil-msg">Machining twelve cylinders</p>
+  </div>
+
+  <header id="top">
+    <div class="plate">
+      <h1>TIPO <span>600</span></h1>
+      <p>6.0 L · 60° V12 · 48-valve DOHC</p>
+    </div>
+    <div class="seg" id="modeSeg" role="group" aria-label="View mode">
+      <button data-mode="studio" aria-pressed="true">Studio</button>
+      <button data-mode="xray" aria-pressed="false">X-ray</button>
+      <button data-mode="section" aria-pressed="false">Section</button>
+    </div>
+    <div class="tools">
+      <button class="tool" id="tool-callouts" aria-pressed="true" title="Part callouts" aria-label="Part callouts"><svg viewBox="0 0 24 24"><path d="M4 12V5a1 1 0 0 1 1-1h7l8 8-8 8-8-8Z"/><circle cx="8.5" cy="8.5" r="1.2"/></svg></button>
+      <button class="tool" id="tool-spin" aria-pressed="false" title="Turntable" aria-label="Turntable"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg></button>
+      <button class="tool" id="tool-sound" aria-pressed="false" title="Engine sound" aria-label="Engine sound"><svg viewBox="0 0 24 24"><path d="M4 10v4h3l5 4V6L7 10H4Z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg></button>
+      <button class="tool" id="tool-clean" aria-pressed="false" title="Hide panels (H)" aria-label="Hide panels"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 5v14M16 5v14"/></svg></button>
+      <button class="tool" id="tool-full" aria-pressed="false" title="Fullscreen" aria-label="Fullscreen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+    </div>
+  </header>
+
+  <main id="stage">
+    <div id="callouts"></div>
+    <div id="tip" hidden></div>
+    <nav id="views" aria-label="Camera views">
+      <button data-view="hero">Hero</button>
+      <button data-view="front">Front</button>
+      <button data-view="side">Side</button>
+      <button data-view="top">Top</button>
+      <button data-view="rear">Rear</button>
+      <button data-view="valley">Intake</button>
+    </nav>
+    <aside id="partcard" class="panel" hidden>
+      <button class="x" id="part-close" aria-label="Close">×</button>
+      <h3 id="part-name"></h3>
+      <p class="mat" id="part-mat"></p>
+      <p class="txt" id="part-text"></p>
+      <dl class="spec" id="part-spec"></dl>
+      <div class="acts">
+        <button id="part-focus">Focus</button>
+        <button id="part-isolate">Isolate</button>
+      </div>
+    </aside>
+  </main>
+
+  <div id="dock">
+    <nav id="tabs" role="tablist">
+      <button role="tab" data-tab="drive" aria-selected="true">Drive</button>
+      <button role="tab" data-tab="config" aria-selected="false">Configure</button>
+      <button role="tab" data-tab="data" aria-selected="false">Telemetry</button>
+    </nav>
+
+    <section id="pane-drive" class="pane panel active" aria-label="Drive">
+      <div class="rail">
+        <button id="ign" aria-pressed="false" aria-label="Start or stop the engine"><b id="ign-label">START</b><span>ENGINE</span></button>
+        <div class="grp">
+          <div class="grp-head"><label class="label" for="throttle">Throttle</label><b id="throttle-val">0 %</b></div>
+          <input type="range" id="throttle" min="0" max="100" value="0" step="1">
+        </div>
+        <div class="grp">
+          <div class="grp-head"><label class="label" for="crank">Turn by hand</label><b id="crank-val">0°</b></div>
+          <input type="range" id="crank" min="0" max="720" value="0" step="1">
+        </div>
+        <div class="grp">
+          <div class="grp-head"><label class="label" for="explode">Exploded view</label><b id="explode-val">0 %</b></div>
+          <input type="range" id="explode" min="0" max="100" value="0" step="1">
+        </div>
+        <div class="grp row">
+          <span class="label">Playback</span>
+          <div class="seg small" id="slowSeg" role="group" aria-label="Playback speed">
+            <button data-slow="1" aria-pressed="false">1×</button>
+            <button data-slow="0.125" aria-pressed="false">1/8</button>
+            <button data-slow="0.03125" aria-pressed="true">1/32</button>
+            <button data-slow="0.0078125" aria-pressed="false">1/128</button>
+          </div>
+        </div>
+        <p class="hint">Drag to orbit, scroll to zoom, click any part for its details.</p>
+        <div class="sec">
+          <div class="seg small" id="secSeg" role="group" aria-label="Section plane">
+            <button data-sec="cross" aria-pressed="true">Cross</button>
+            <button data-sec="long" aria-pressed="false">Lengthwise</button>
+            <button data-sec="bank" aria-pressed="false">Bank</button>
+          </div>
+          <input type="range" id="secPos" min="0" max="1000" value="500" step="1" aria-label="Section position">
+        </div>
+      </div>
+    </section>
+
+    <section id="pane-config" class="pane panel" aria-label="Configure">
+      <h2>Finish</h2>
+      <div id="finishes"></div>
+      <h2>Layers <button id="layers-all">Show all</button></h2>
+      <div class="layers" id="layers"></div>
+    </section>
+
+    <section id="pane-data" class="pane panel" aria-label="Telemetry">
+      <div class="tach">
+        <svg id="tach" viewBox="0 0 260 150" aria-hidden="true"></svg>
+        <div class="read"><b id="rpm">0</b><span>rev / min</span></div>
+      </div>
+      <div class="outs">
+        <div><span class="label">Power</span><b><span id="kw">0</span><small>kW</small></b><em id="ps">0 PS</em></div>
+        <div><span class="label">Torque</span><b><span id="nm">0</span><small>N·m</small></b><em id="lbft">0 lb·ft</em></div>
+      </div>
+      <svg id="chart" viewBox="0 0 268 118" role="img" aria-label="Full-load power and torque curves"></svg>
+      <p class="cap">Full-load curves against rpm × 1000. The marker follows engine speed.</p>
+
+      <h2>Live</h2>
+      <div class="stats">
+        <div><span class="label">Crank angle</span><b id="st-angle">0°</b></div>
+        <div><span class="label">Piston speed</span><b id="st-piston">0.0 m/s</b></div>
+        <div><span class="label">Firing rate</span><b id="st-fire">0 Hz</b></div>
+        <div><span class="label">Manifold</span><b id="st-heat">20 °C</b></div>
+      </div>
+
+      <h2>Firing order</h2>
+      <div class="firing" id="firing"></div>
+
+      <h2>Cylinders</h2>
+      <div id="cyls"></div>
+      <div class="legend">
+        <span><i style="--c:var(--cool)"></i>Intake</span><span><i style="--c:var(--violet)"></i>Compression</span>
+        <span><i style="--c:var(--hot)"></i>Power</span><span><i style="--c:var(--spent)"></i>Exhaust</span>
+      </div>
+
+      <h2>Specification</h2>
+      <dl class="spec" id="specs"></dl>
+    </section>
+  </div>
+</div>
+<script type="module" src="js/main.js"></script>
+<!--/page-->
+</body>
+</html>
