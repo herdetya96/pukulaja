@@ -5,7 +5,7 @@ import { OrbitControls, EffectComposer, RenderPass, UnrealBloomPass, OutputPass,
 import * as Tx from './textures.js';
 
 const BG = '#0a0b0d';
-const SHELL_PARTS = ['block', 'liners', 'sump', 'heads', 'gasket', 'covers', 'coils', 'intake', 'fuel', 'airbox', 'exhaust', 'timingcover'];
+const SHELL_PARTS = ['block', 'liners', 'sump', 'heads', 'gasket', 'covers', 'coils', 'intake', 'fuel', 'airbox', 'exhaust', 'timingcover', 'accessory'];
 const SOLID_PARTS = ['block', 'liners', 'sump', 'heads', 'gasket'];
 const S30 = 0.5, C30 = Math.cos(Math.PI / 6);
 
@@ -53,7 +53,7 @@ export function createStage(container, M, engine, { lite = false } = {}) {
       m.position.set(...pos); m.lookAt(...look); env.add(m);
     };
     env.add(new THREE.Mesh(new THREE.BoxGeometry(80, 50, 80), new THREE.MeshBasicMaterial({ color: '#07080a', side: THREE.BackSide })));
-    panel(22, 10, [0, 15, 2], [0, 0, 0], '#fff6ea', 5.2);          // overhead key
+    panel(22, 10, [0, 15, 2], [0, 0, 0], '#fff6ea', 4.0);          // overhead key
     panel(3.2, 16, [-17, 5, 9], [0, 1, 0], '#cfe0ff', 7.5);        // cool strip, left
     panel(3.2, 16, [17, 5, -8], [0, 1, 0], '#ffe2c0', 6.0);        // warm strip, right
     panel(26, 2.2, [0, 9, -18], [0, 1, 0], '#ffffff', 8.5);        // rim bar behind
@@ -115,7 +115,23 @@ export function createStage(container, M, engine, { lite = false } = {}) {
   function setMirror(on) {
     if (on && !mirror) {
       const size = mobile ? 512 : 1024;
-      mirror = new Reflector(new THREE.CircleGeometry(6.36, 96), { textureWidth: size, textureHeight: size, color: 0x191a1d, clipBias: 0.003, multisample: mobile ? 0 : 4 });
+      // Reflector with a multiplicative tint (the stock overlay blend lets
+      // highlights through at full strength) and a falloff towards the rim.
+      const shader = {
+        name: 'PlinthMirror',
+        uniforms: { color: { value: null }, tDiffuse: { value: null }, textureMatrix: { value: null } },
+        vertexShader: /* glsl */`
+          uniform mat4 textureMatrix; varying vec4 vUv; varying float vR;
+          void main(){ vUv = textureMatrix * vec4(position, 1.0); vR = length(position.xy); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+        fragmentShader: /* glsl */`
+          uniform vec3 color; uniform sampler2D tDiffuse; varying vec4 vUv; varying float vR;
+          void main(){
+            vec3 base = min(texture2DProj(tDiffuse, vUv).rgb, vec3(1.1));
+            float fall = smoothstep(6.4, 1.6, vR);
+            gl_FragColor = vec4(base * color * (0.25 + 0.75 * fall), 1.0);
+          }`,
+      };
+      mirror = new Reflector(new THREE.CircleGeometry(6.36, 96), { textureWidth: size, textureHeight: size, color: 0x565a62, clipBias: 0.003, multisample: mobile ? 0 : 4, type: THREE.HalfFloatType, shader });
       mirror.rotation.x = -Math.PI / 2; mirror.position.y = FLOOR_Y + 0.001;
       mirror.raycast = () => {};
       floorG.add(mirror);
@@ -132,7 +148,7 @@ export function createStage(container, M, engine, { lite = false } = {}) {
   const composer = new EffectComposer(renderer, rt);
   composer.setPixelRatio(pixelRatio);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.32, 0.55, 1.0);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.2, 0.5, 1.7);
   composer.addPass(bloom);
   bloom.enabled = !lite;
   composer.addPass(new OutputPass());
@@ -186,7 +202,7 @@ export function createStage(container, M, engine, { lite = false } = {}) {
   }
   function setView(name, dur) { flyTo(viewPose(VIEWS[name] || name), dur); }
   function finishFly() { if (fly) fly.t = 0.9999; }
-  function snapView(name) { const p = viewPose(VIEWS[name]); camera.position.copy(p.pos); controls.target.copy(p.target); controls.update(); }
+  function snapView(name) { const p = viewPose(VIEWS[name] || name); camera.position.copy(p.pos); controls.target.copy(p.target); controls.update(); }
 
   // keep the framing when the engine grows or shrinks (explode slider)
   function setFrame(radius, baseY) {

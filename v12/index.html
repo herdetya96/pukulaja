@@ -188,6 +188,8 @@ input[type=range]:disabled{opacity:.35;cursor:default}
 .co::after{content:"";position:absolute;left:3px;top:-1px;width:30px;height:1px;background:linear-gradient(90deg,var(--amber),rgba(255,180,84,.25));transform-origin:0 50%;transform:rotate(-38deg)}
 .co b{position:absolute;left:30px;top:-33px;padding:4px 8px;border-radius:4px;background:rgba(12,13,16,.78);border:1px solid var(--line);
   font:500 9.5px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;color:var(--fg)}
+.co.l::after{left:auto;right:3px;transform-origin:100% 50%;transform:rotate(38deg);background:linear-gradient(270deg,var(--amber),rgba(255,180,84,.25))}
+.co.l b{left:auto;right:30px}
 .co:hover b{border-color:var(--amber);color:var(--amber)}
 #tip{position:absolute;z-index:7;left:0;top:0;pointer-events:none;padding:4px 8px;border-radius:4px;background:rgba(12,13,16,.9);border:1px solid var(--line-strong);
   font:500 9.5px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}

@@ -127,7 +127,7 @@ export const FINISHES = {
     options: [
       { id: 'cast', name: 'Natural cast aluminium', color: '#aeb1b5', rough: 0.58 },
       { id: 'graphite', name: 'Graphite ceramic coat', color: '#3a3d42', rough: 0.5 },
-      { id: 'bronze', name: 'Magnesium bronze', color: '#8b7446', rough: 0.52 },
+      { id: 'bronze', name: 'Magnesium bronze', color: '#7b6a4c', rough: 0.52 },
     ],
   },
   intake: {
@@ -260,6 +260,12 @@ export const PARTS = {
     material: 'Cast aluminium',
     specs: [],
     text: 'Encloses the chain drive at the front of the engine and carries the front crank seal.',
+  },
+  accessory: {
+    name: 'Accessory drive', layer: 'timing',
+    material: 'Poly-V belt, cast housings',
+    specs: [['Alternator', '180 A'], ['Water pump', 'Centrifugal, belt-driven']],
+    text: 'A single ribbed belt runs from the crank damper to the alternator and the water pump. The pump sits at the top of the vee so coolant splits evenly between the two banks.',
   },
   flywheel: {
     name: 'Flywheel', layer: 'rotating',

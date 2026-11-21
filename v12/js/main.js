@@ -51,6 +51,7 @@ async function boot() {
     return s.range[1] + (s.range[0] - s.range[1]) * state.sectionPos;
   };
 
+  const fades = [];
   const app = {
     anchors: engine.anchors,
     setMode(m) {
@@ -61,7 +62,12 @@ async function boot() {
     },
     setFinish(group, id) {
       state.finishes[group] = id;
+      // cross-fade the paint rather than snapping it
+      const mats = { covers: [M.cover], block: [M.cast, M.castHead], intake: [M.stack], exhaust: [M.exhaust] }[group];
+      const from = mats.map(m => m.color.clone());
       applyFinish(M, group, id);
+      fades.push({ mats, from, to: mats.map(m => m.color.clone()), t: 0 });
+      mats.forEach((m, i) => m.color.copy(from[i]));
       stage.syncClipped();
       refreshVisibility();
       if (state.selected) ui.showPart(state.selected);
@@ -158,8 +164,9 @@ async function boot() {
   canvas.addEventListener('pointerleave', () => ui.showTip(null));
 
   addEventListener('keydown', e => {
-    if (e.target.closest?.('input, button, [contenteditable]') && e.key !== 'Escape') return;
-    if (e.key === ' ') { e.preventDefault(); app.toggleRun(); }
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.target.closest?.('input') && e.key !== 'Escape') return;      // sliders keep their own keys
+    if (e.key === ' ') { if (e.target.closest?.('button')) return; e.preventDefault(); app.toggleRun(); }
     else if (e.key === 'h' || e.key === 'H') app.toggle('clean');
     else if (e.key === 'e' || e.key === 'E') app.setExplode(state.explodeTarget > 0.5 ? 0 : 1);
     else if (e.key === '1') app.setMode('studio');
@@ -195,6 +202,14 @@ async function boot() {
       stage.setExploded(state.explode > 0.04);
     }
 
+    for (let i = fades.length - 1; i >= 0; i--) {
+      const f = fades[i];
+      f.t = Math.min(1, f.t + dt / 0.45);
+      f.mats.forEach((m, k) => m.color.lerpColors(f.from[k], f.to[k], f.t * f.t * (3 - 2 * f.t)));
+      if (f.t >= 1) fades.splice(i, 1);
+      if (state.mode === 'section') stage.syncClipped();
+    }
+
     stage.render(dt, frames > 30);
     ui.update(dt, engine);
     ui.updateCallouts(stage.project);
@@ -202,6 +217,11 @@ async function boot() {
     if (++frames === 2) {
       document.getElementById('veil').classList.add('done');
       state.running = true; ui.sync();
+      // settle into the hero angle from a low, wide pass
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches && location.hash !== '#lite') {
+        stage.snapView({ az: 68, pol: 82, r: 1.45, ty: 0.3 });
+        stage.setView('hero', 2.6);
+      }
     }
     requestAnimationFrame(tick);
   }

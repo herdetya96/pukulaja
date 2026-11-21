@@ -23,6 +23,38 @@ const SPROCKET_R = 19;
 const CHAMBER = 13;
 const SPRING_Y0 = 56, SPRING_LEN = 28, BUCKET_Y = 82;
 
+// Closed path of a belt or chain wrapped round a set of pulleys, given
+// counter-clockwise in (z, y). Returns sample points and the loop length.
+function beltLoop(circles, step = 3) {
+  const pts = [], n = circles.length;
+  const tangent = i => {
+    const a = circles[i], b = circles[(i + 1) % n];
+    const dx = b.c[0] - a.c[0], dy = b.c[1] - a.c[1], D = Math.hypot(dx, dy);
+    const cb = (a.r - b.r) / D, sb = Math.sqrt(1 - cb * cb);
+    const ux = dx / D, uy = dy / D;
+    return Math.atan2(uy * cb - ux * sb, ux * cb + uy * sb);       // normal = d·cosβ + right·sinβ
+  };
+  const tans = circles.map((_, i) => tangent(i));
+  for (let i = 0; i < n; i++) {
+    const c = circles[i];
+    let aIn = tans[(i - 1 + n) % n], aOut = tans[i];
+    while (aOut < aIn) aOut += Math.PI * 2;
+    const steps = Math.max(4, Math.ceil((aOut - aIn) * c.r / step));
+    for (let k = 0; k <= steps; k++) {
+      const a = aIn + (aOut - aIn) * k / steps;
+      pts.push([c.c[0] + c.r * Math.cos(a), c.c[1] + c.r * Math.sin(a)]);
+    }
+    const nx = circles[(i + 1) % n];
+    const p0 = [c.c[0] + c.r * Math.cos(aOut), c.c[1] + c.r * Math.sin(aOut)];
+    const p1 = [nx.c[0] + nx.r * Math.cos(aOut), nx.c[1] + nx.r * Math.sin(aOut)];
+    const seg = Math.ceil(Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) / (step * 4));
+    for (let k = 1; k < seg; k++) pts.push([p0[0] + (p1[0] - p0[0]) * k / seg, p0[1] + (p1[1] - p0[1]) * k / seg]);
+  }
+  let len = 0;
+  for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; len += Math.hypot(b[0] - a[0], b[1] - a[1]); }
+  return { pts, len };
+}
+
 export function buildEngine(M) {
   const root = new THREE.Group();
   root.name = 'engine';
@@ -34,9 +66,9 @@ export function buildEngine(M) {
   const reg = (id, obj) => { (parts[id] ??= []).push(obj); obj.userData.part = id; return obj; };
   const ex = (obj, vec, order) => { explodes.push({ obj, base: obj.position.clone(), vec: new THREE.Vector3(...vec), order }); return obj; };
   // callout anchor: a point on the part and the direction its surface faces
-  const anchor = (id, parent, p, label, n = [0, 1, 0]) => {
+  const anchor = (id, parent, p, label, n = [0, 1, 0], side = 'r') => {
     const o = new THREE.Object3D(); o.position.set(...p); parent.add(o);
-    anchors.push({ part: id, obj: o, label, normal: n && new THREE.Vector3(...n) });
+    anchors.push({ part: id, obj: o, label, side, normal: n && new THREE.Vector3(...n) });
   };
 
   const Mb = { 1: bankMatrix(1), [-1]: bankMatrix(-1) };
@@ -152,7 +184,7 @@ export function buildEngine(M) {
     for (let x = -300; x <= 300; x += 60) for (const sg of [1, -1]) b.push({ p: [x, -91, sg * 101.5], n: [0, -1, 0] });
     P.bolts(b, 4.2);
     const g = P.build(); reg('sump', g); root.add(g); ex(g, [0, -70, 0], 0.5);
-    anchor('sump', g, [-120, -112, 96], 'Dry sump', [0, -0.2, 1]);
+    anchor('sump', g, [-120, -112, 96], 'Dry sump', [0, -0.2, 1], 'l');
   }
 
   // ------------------------------------------------------------- crankshaft
@@ -214,7 +246,7 @@ export function buildEngine(M) {
       F.bolts([{ p: [-366, 36 * Math.cos(a), 36 * Math.sin(a)], n: [-1, 0, 0] }], 5.5);
     }
     const fg = F.build(); reg('flywheel', fg); crankG.add(fg); ex(fg, [-170, 0, 0], 0.8);
-    anchor('flywheel', fg, [-368, 0, 0], 'Flywheel', [-1, 0, 0]);
+    anchor('flywheel', fg, [-368, 0, 0], 'Flywheel', [-1, 0, 0], 'l');
   }
 
   // ------------------------------------------------------- rods and pistons
@@ -327,7 +359,7 @@ export function buildEngine(M) {
         P.add(box(20, E.camY - y3 - 1, 38), 'castHead', T(x, (E.camY - 1 + y3) / 2, z));
       }
       const g = P.build(); reg('heads', g); bg.add(g); ex(g, [0, 150, 0], 0.4);
-      if (s === 1) anchor('heads', g, [-190, E.deck + 70, 80], 'Cylinder head', [0, 0, 1]);
+      if (s === 1) anchor('heads', g, [-190, E.deck + 70, 80], 'Cylinder head', [0, 0, 1], 'l');
     }
 
     // camshafts
@@ -591,33 +623,7 @@ export function buildEngine(M) {
       { c: [E.camY * S30 + E.camZ * C30, E.camY * C30 - E.camZ * S30], r: SPROCKET_R * 2 + 1 },
       { c: [E.camY * S30 - E.camZ * C30, E.camY * C30 + E.camZ * S30], r: SPROCKET_R * 2 + 1 },
     ];
-    const pts = [];
-    const n = circles.length;
-    const tangent = i => {
-      const a = circles[i], b = circles[(i + 1) % n];
-      const dx = b.c[0] - a.c[0], dy = b.c[1] - a.c[1], D = Math.hypot(dx, dy);
-      const cb = (a.r - b.r) / D, sb = Math.sqrt(1 - cb * cb);
-      const ux = dx / D, uy = dy / D;
-      return Math.atan2(uy * cb - ux * sb, ux * cb + uy * sb);       // normal = d·cosβ + right·sinβ
-    };
-    const tans = circles.map((_, i) => tangent(i));
-    let len = 0;
-    for (let i = 0; i < n; i++) {
-      const c = circles[i];
-      let aIn = tans[(i - 1 + n) % n], aOut = tans[i];
-      while (aOut < aIn) aOut += Math.PI * 2;
-      const steps = Math.max(4, Math.ceil((aOut - aIn) * c.r / 3));
-      for (let k = 0; k <= steps; k++) {
-        const a = aIn + (aOut - aIn) * k / steps;
-        pts.push([c.c[0] + c.r * Math.cos(a), c.c[1] + c.r * Math.sin(a)]);
-      }
-      const nx = circles[(i + 1) % n];
-      const p0 = [c.c[0] + c.r * Math.cos(aOut), c.c[1] + c.r * Math.sin(aOut)];
-      const p1 = [nx.c[0] + nx.r * Math.cos(aOut), nx.c[1] + nx.r * Math.sin(aOut)];
-      const seg = Math.ceil(Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) / 12);
-      for (let k = 1; k < seg; k++) pts.push([p0[0] + (p1[0] - p0[0]) * k / seg, p0[1] + (p1[1] - p0[1]) * k / seg]);
-    }
-    for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length]; len += Math.hypot(b[0] - a[0], b[1] - a[1]); }
+    const { pts, len } = beltLoop(circles, 3);
     const links = Math.round(len / 19.05);
     chainTex.repeat.set(links, 1);
     const curve = new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(0, p[1], p[0])), true, 'centripetal');
@@ -645,6 +651,8 @@ export function buildEngine(M) {
     for (const s of [1, -1]) {
       const mb = Mb[s];
       C.add(rbox(41.5, 266, 176, 9, 4), 'cast', mb.clone().multiply(T(351.25, 233, 0)));
+      for (const z of [34, -34]) C.add(rbox(5, 150, 7, 2, 2), 'cast', mb.clone().multiply(T(373, 205, z)));
+      C.add(rbox(5, 7, 120, 2, 2), 'cast', mb.clone().multiply(T(373, 128, 0)));
       for (const z of [E.camZ, -E.camZ]) {
         C.add(cylX(34, 8, 36), 'machined', mb.clone().multiply(T(374.5, E.camY, z)));
         C.add(cylX(12, 5, 6), 'steelDark', mb.clone().multiply(T(380, E.camY, z)));
@@ -659,6 +667,54 @@ export function buildEngine(M) {
     C.bolts(b, 4.4);
     const cg = C.build(); reg('timingcover', cg); root.add(cg); ex(cg, [230, 250, 0], 0.75);
     anchor('timingcover', cg, [374, 96, 0], 'Timing cover', [1, 0, 0]);
+  }
+
+  // ------------------------------------------------------- accessory drive
+  const pulleys = [];
+  {
+    const ag = new THREE.Group(); ag.name = 'accessory'; root.add(ag); ex(ag, [290, 250, 0], 0.7);
+    reg('accessory', ag);
+    const ALT = [176, 40], PUMP = [0, 170], BX = 399;
+    const P = new Part('accessory', M);
+    // water pump on the cover apex, outlet neck pointing up
+    P.add(cylX(47, 18, 36), 'cast', T(381, PUMP[1], 0));
+    P.add(cylY(17, 46, 24), 'cast', T(381, PUMP[1] + 58, 0));
+    P.add(cylY(20, 8, 24), 'machined', T(381, PUMP[1] + 80, 0));
+    P.add(cylY(18.5, 36, 20), 'rubber', T(381, PUMP[1] + 100, 0));
+    P.bolts([0, 1, 2, 3, 4].map(i => { const a = i / 5 * Math.PI * 2 + 0.3; return { p: [390, PUMP[1] + 39 * Math.cos(a), 39 * Math.sin(a)], n: [1, 0, 0] }; }), 3.6);
+    // alternator, low on the right flank
+    P.add(cylX(47, 74, 40), 'cast', T(348, ALT[1], ALT[0]));
+    for (let i = 0; i < 7; i++) P.add(cylX(49.5, 3, 40), 'machined', T(318 + i * 8, ALT[1], ALT[0]));
+    P.add(cylX(40, 10, 32), 'plastic', T(307, ALT[1], ALT[0]));
+    P.add(cylX(14, 12, 20), 'steel', T(389, ALT[1], ALT[0]));
+    P.add(rbox(62, 26, 70, 5), 'cast', T(338, ALT[1] - 6, 122));
+    P.add(rbox(14, 96, 12, 3), 'steelDark', mat4({ p: [380, ALT[1] + 62, ALT[0] - 34], r: [0.55, 0, 0] }));
+    const g = P.build(); ag.add(g);
+    // grooved pulleys that turn with the belt
+    const pulley = (r, c, ratio) => {
+      const prof = [[10, -12], [r - 4, -12], [r + 2, -13], [r + 2, -11]];
+      for (let i = 0; i < 5; i++) prof.push([r, -10 + i * 4.2], [r - 2.6, -7.9 + i * 4.2]);
+      prof.push([r, 11], [r + 2, 11], [r + 2, 13], [r - 4, 12], [10, 12]);
+      const face = circleShape(r - 6);
+      face.holes.push(circlePath(0, 0, 7));
+      for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; face.holes.push(circlePath((r - 6) * 0.58 * Math.cos(a), (r - 6) * 0.58 * Math.sin(a), (r - 6) * 0.2)); }
+      const Q = new Part('accessory', M);
+      Q.add(lathe(prof, 40, 30), 'steelDark', new THREE.Matrix4().makeRotationZ(-Math.PI / 2));
+      Q.add(extrudeX(face, 8, 13, { bevel: 0.8, seg: 20 }), 'machined');
+      Q.add(cylX(9, 8, 6), 'steel', T(15, 0, 0));
+      const pg = Q.build();
+      pg.position.set(BX, c[1], c[0]);
+      ag.add(pg); pulleys.push({ group: pg, ratio });
+    };
+    pulley(30, ALT, 80 / 30);
+    pulley(40, PUMP, 80 / 40);
+    const { pts } = beltLoop([{ c: [0, 0], r: 82.2 }, { c: ALT, r: 32.2 }, { c: PUMP, r: 42.2 }], 4);
+    const curve = new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(0, p[1], p[0])), true, 'centripetal');
+    const beltGeo = new THREE.TubeGeometry(curve, pts.length * 2, 2.1, 6, true);
+    beltGeo.scale(5.4, 1, 1);
+    const belt = new THREE.Mesh(beltGeo, M.rubber);
+    belt.position.x = BX; belt.castShadow = true; belt.userData.part = 'accessory'; belt.userData.matKey = 'rubber';
+    ag.add(belt);
   }
 
   // ------------------------------------------------------------------ stand
@@ -723,6 +779,7 @@ export function buildEngine(M) {
       gasColor(c.phase, c.gas.material.color);
     }
     for (const cam of cams) cam.group.rotation.x = cam.s * theta / 2;
+    for (const p of pulleys) p.group.rotation.x = theta * p.ratio;
     for (const set of valveSets) {
       const idx = { intake: 0, exhaust: 0 };
       set.items.forEach((it, i) => {

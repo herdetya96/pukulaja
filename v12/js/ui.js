@@ -170,7 +170,7 @@ export function createUI(app, state) {
   // -------------------------------------------------------------- callouts
   const coWrap = $('callouts');
   const cos = app.anchors.map(a => {
-    const n = el('div', { class: 'co' }, coWrap);
+    const n = el('div', { class: 'co' + (a.side === 'l' ? ' l' : '') }, coWrap);
     el('b', { text: a.label }, n);
     n.addEventListener('click', () => app.select(a.part));
     return { a, n, shown: true, p: { x: 0, y: 0, visible: false } };
