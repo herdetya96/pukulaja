@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!--page-->
+<title>Parkir Tipo 600</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&family=Hanken+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* Layout: the lot fills the screen. A thin instrument strip rides the top edge,
+   guidance sits centre-top, pedals and steering in the bottom corners on touch
+   screens. Menu and result are cards over the live scene. */
+:root{
+  color-scheme:dark;
+  --bg:#0a0b0d;
+  --surface:rgba(14,16,20,.8);
+  --line:rgba(236,232,224,.14);
+  --line-strong:rgba(236,232,224,.3);
+  --fg:#ece8e0;
+  --fg-2:#b4b2ac;
+  --fg-3:#7d7f84;
+  --amber:#ffb454;
+  --ok:#7fd4a0;
+  --hot:#ff5b2e;
+  --f-display:'Syncopate','Eurostile','Arial Black',system-ui,sans-serif;
+  --f-body:'Hanken Grotesk',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --f-mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  --gl:max(16px,env(safe-area-inset-left,0px));
+  --gr:max(16px,env(safe-area-inset-right,0px));
+  --gb:max(16px,env(safe-area-inset-bottom,0px));
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font:400 14px/1.45 var(--f-body);overflow:hidden;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;
+  -webkit-user-select:none;user-select:none}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0;padding:0}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+h1,h2,p,dl,dd{margin:0}
+#app{position:relative;height:100%;overflow:hidden;background:var(--bg)}
+#stage{position:absolute;inset:0;touch-action:none}
+#stage canvas{display:block;width:100%;height:100%}
+#flash{position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 50%,transparent 40%,rgba(255,91,46,.55) 100%)}
+.glass{background:var(--surface);border:1px solid var(--line);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+.label{font:500 9.5px/1.2 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--fg-3)}
+
+/* ---------- instrument strip ---------- */
+#hud{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:10px;padding:12px var(--gr) 0 var(--gl);pointer-events:none;flex-wrap:wrap}
+#hud>*{pointer-events:auto}
+.pill{display:flex;align-items:baseline;gap:7px;padding:8px 13px;border-radius:999px}
+.pill b{font:700 15px/1 var(--f-mono);font-variant-numeric:tabular-nums}
+.pill small{font:500 10px/1 var(--f-mono);color:var(--fg-3);letter-spacing:.08em}
+#hud-level{font:700 10.5px/1 var(--f-display);letter-spacing:.2em;text-transform:uppercase;white-space:nowrap}
+#hud-gear{color:var(--amber);min-width:1ch;text-align:center}
+#hud-hits{color:var(--ok);letter-spacing:.2em;font-size:12px}
+.spacer{flex:1 1 0}
+.tool{width:38px;height:38px;display:grid;place-items:center;border-radius:50%;color:var(--fg-2)}
+.tool:hover{color:var(--fg);border-color:var(--line-strong)}
+.tool[aria-pressed="true"]{color:var(--amber);border-color:rgba(255,180,84,.55)}
+.tool svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+#guide{position:absolute;top:66px;left:50%;transform:translateX(-50%);display:grid;justify-items:center;gap:8px;pointer-events:none;width:min(92%,460px);text-align:center}
+#hud-guide{padding:8px 16px;border-radius:999px;font:500 12.5px/1.2 var(--f-mono);letter-spacing:.04em;color:var(--amber);background:var(--surface);border:1px solid rgba(255,180,84,.4)}
+#hud-guide:empty{display:none}
+#hud-arrow{width:34px;height:34px;fill:var(--amber);filter:drop-shadow(0 2px 6px rgba(0,0,0,.6))}
+#hud-hint{font-size:13.5px;color:var(--fg);text-shadow:0 1px 8px rgba(0,0,0,.8);text-wrap:balance}
+#hold{position:absolute;left:50%;top:44%;width:92px;height:92px;margin:-46px 0 0 -46px;border-radius:50%;pointer-events:none;
+  background:conic-gradient(var(--ok) calc(var(--p,0)*360deg),rgba(236,232,224,.16) 0);
+  -webkit-mask:radial-gradient(circle,transparent 36px,#000 37px);mask:radial-gradient(circle,transparent 36px,#000 37px)}
+#sensor{position:absolute;left:50%;bottom:calc(var(--gb) + 8px);transform:translateX(-50%);display:flex;gap:4px;pointer-events:none}
+#sensor i{width:26px;height:5px;border-radius:3px;background:rgba(236,232,224,.18)}
+#sensor[data-level="1"] i:nth-child(1){background:var(--ok)}
+#sensor[data-level="2"] i:nth-child(-n+2){background:var(--amber)}
+#sensor[data-level="3"] i{background:var(--hot)}
+
+/* ---------- touch controls ---------- */
+#pads{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;align-items:flex-end;padding:0 var(--gr) calc(var(--gb) + 22px) var(--gl);pointer-events:none}
+#pads>div{display:flex;gap:10px;pointer-events:auto}
+.pad{width:74px;height:74px;border-radius:20px;display:grid;place-content:center;gap:4px;text-align:center;touch-action:none;color:var(--fg);transition:background .08s,transform .08s}
+.pad svg{width:26px;height:26px;margin:0 auto;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pad span{font:700 8.5px/1 var(--f-display);letter-spacing:.16em}
+.pad.on{background:rgba(255,180,84,.3);border-color:var(--amber);transform:scale(.96)}
+.pad.tall{height:104px}
+.pad.go{color:var(--ok)}
+@media (hover:hover) and (pointer:fine){#pads{display:none}}
+
+/* ---------- cards ---------- */
+.card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(560px,calc(100% - var(--gl) - var(--gr)));max-height:calc(100% - 32px);overflow:auto;
+  border-radius:14px;padding:22px 22px 18px}
+.card h1{font:700 20px/1.1 var(--f-display);letter-spacing:.26em;text-transform:uppercase}
+.card h1 span{color:var(--amber)}
+.card .sub{color:var(--fg-2);margin-top:8px;font-size:13.5px;max-width:52ch}
+#levels{display:grid;gap:6px;margin-top:16px}
+.lvl{display:grid;grid-template-columns:auto 1fr auto;grid-template-rows:auto auto;column-gap:12px;align-items:center;text-align:left;padding:10px 12px;border-radius:10px;border:1px solid var(--line);
+  background:rgba(236,232,224,.03);transition:border-color .12s,background .12s}
+.lvl:hover{border-color:var(--amber);background:rgba(255,180,84,.08)}
+.lvl i{grid-row:span 2;font:700 15px/1 var(--f-mono);font-style:normal;color:var(--fg-3);width:1.4em;text-align:center}
+.lvl b{font-weight:600;font-size:14.5px}
+.lvl span{grid-column:2;font-size:12px;color:var(--fg-2);min-width:0}
+.lvl em{grid-row:1/span 2;grid-column:3;font-style:normal;color:var(--amber);letter-spacing:.12em;font-size:14px;white-space:nowrap}
+.keys{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);font-size:12px;color:var(--fg-2)}
+.keys kbd{font:500 10.5px/1 var(--f-mono);padding:3px 6px;border-radius:4px;border:1px solid var(--line-strong);color:var(--fg);margin-right:5px}
+#result{text-align:center;width:min(380px,calc(100% - var(--gl) - var(--gr)))}
+#res-title{font:700 17px/1.1 var(--f-display);letter-spacing:.24em;text-transform:uppercase}
+#res-stars{font-size:38px;line-height:1.2;color:var(--amber);letter-spacing:.14em;margin-top:8px}
+#res-body{display:grid;grid-template-columns:auto 1fr;gap:7px 16px;text-align:left;margin:16px 0 4px;padding:14px 0;border-block:1px solid var(--line)}
+#res-body dt{color:var(--fg-3);font-size:12.5px}
+#res-body dd{text-align:right;font:500 13px/1.35 var(--f-mono);font-variant-numeric:tabular-nums}
+#res-body dd small{display:block;color:var(--fg-3);font-size:10.5px}
+.acts{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:14px}
+.btn{padding:11px 18px;border-radius:999px;border:1px solid var(--line-strong);font:700 9.5px/1 var(--f-display);letter-spacing:.2em;text-transform:uppercase}
+.btn:hover{border-color:var(--amber);color:var(--amber)}
+.btn.primary{background:var(--amber);border-color:var(--amber);color:#14100a}
+.btn.primary:hover{color:#14100a;filter:brightness(1.08)}
+
+#veil{position:absolute;inset:0;z-index:20;display:grid;place-content:center;gap:14px;text-align:center;background:var(--bg);transition:opacity .6s ease}
+#veil.done{opacity:0;pointer-events:none}
+#veil h1{font:700 20px/1 var(--f-display);letter-spacing:.3em;margin-right:-.3em}
+#veil p{font:400 10.5px/1.5 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--fg-3)}
+
+@media (max-width:560px){
+  #hud{gap:6px;padding-top:8px}
+  .pill{padding:7px 10px}
+  #hud-level{flex:1 1 100%;order:-1;padding-left:2px}
+  .spacer{display:none}
+  #guide{top:92px}
+  .card{padding:18px 16px 14px}
+  .card h1{font-size:16px}
+  .keys{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<!--/page-->
+</head>
+<body>
+<!--page-->
+<div id="app">
+  <div id="veil"><h1>PARKIR</h1><p>Menyiapkan mobil</p></div>
+
+  <main id="stage">
+    <div id="flash"></div>
+    <header id="hud" hidden>
+      <span id="hud-level" class="pill glass"></span>
+      <span class="pill glass"><small>WAKTU</small><b id="hud-time">0.0</b></span>
+      <span class="pill glass"><b id="hud-gear">N</b><b id="hud-speed">0</b><small>KM/J</small></span>
+      <span class="pill glass" title="Sisa benturan"><b id="hud-hits">●●●</b></span>
+      <span class="spacer"></span>
+      <button class="tool glass" id="btn-restart" title="Ulangi (R)" aria-label="Ulangi level"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.6-5.9"/><path d="M4 4v5h5"/></svg></button>
+      <button class="tool glass" id="btn-cam" title="Ganti kamera (C)" aria-label="Ganti kamera"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="13" height="10" rx="2"/><path d="m16 11 5-3v8l-5-3"/></svg></button>
+      <button class="tool glass" id="btn-sound" aria-pressed="false" title="Suara (M)" aria-label="Suara"><svg viewBox="0 0 24 24"><path d="M4 10v4h3l5 4V6L7 10H4Z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg></button>
+      <button class="tool glass" id="btn-menu" title="Daftar level (Esc)" aria-label="Daftar level"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    </header>
+    <div id="guide">
+      <p id="hud-guide" role="status"></p>
+      <svg id="hud-arrow" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M12 3l7 12h-5v6h-4v-6H5z"/></svg>
+      <p id="hud-hint" hidden></p>
+    </div>
+    <div id="hold" hidden></div>
+    <div id="sensor" data-level="0" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div id="pads" hidden>
+      <div>
+        <button class="pad glass" data-pad="left" aria-label="Setir kiri"><svg viewBox="0 0 24 24"><path d="M14 6l-6 6 6 6"/></svg><span>KIRI</span></button>
+        <button class="pad glass" data-pad="right" aria-label="Setir kanan"><svg viewBox="0 0 24 24"><path d="M10 6l6 6-6 6"/></svg><span>KANAN</span></button>
+      </div>
+      <div>
+        <button class="pad glass" data-pad="brake" aria-label="Rem atau mundur"><svg viewBox="0 0 24 24"><path d="M6 10l6 6 6-6"/></svg><span>REM · MUNDUR</span></button>
+        <button class="pad glass tall go" data-pad="gas" aria-label="Gas"><svg viewBox="0 0 24 24"><path d="M6 14l6-6 6 6"/></svg><span>GAS</span></button>
+      </div>
+    </div>
+  </main>
+
+  <section id="menu" class="card glass" hidden>
+    <h1>PARKIR <span>TIPO 600</span></h1>
+    <p class="sub">Bawa V12 itu ke petak yang menyala tanpa menyenggol apa pun. Tiga benturan dan mobilnya rusak.</p>
+    <div id="levels"></div>
+    <div class="keys">
+      <span><kbd>W</kbd><kbd>↑</kbd>gas</span>
+      <span><kbd>S</kbd><kbd>↓</kbd>rem, lalu mundur</span>
+      <span><kbd>A</kbd><kbd>D</kbd>setir</span>
+      <span><kbd>Spasi</kbd>rem tangan</span>
+      <span><kbd>C</kbd>kamera</span>
+      <span><kbd>R</kbd>ulangi</span>
+    </div>
+  </section>
+
+  <section id="result" class="card glass" hidden>
+    <h2 id="res-title"></h2>
+    <div id="res-stars"></div>
+    <dl id="res-body"></dl>
+    <div class="acts">
+      <button class="btn primary" id="res-next">Lanjut</button>
+      <button class="btn" id="res-retry">Ulangi</button>
+      <button class="btn" id="res-menu">Level</button>
+    </div>
+  </section>
+</div>
+<script type="module" src="js/parkir.js"></script>
+<!--/page-->
+</body>
+</html>

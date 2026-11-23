@@ -83,6 +83,20 @@ Keys: `Space` start/stop, `C` car/engine, `1` `2` `3` view modes, `E` explode or
 lift the body, `B` bonnet, `D` doors, `L` lamps, `H` hide panels, `Esc` clear
 the selection.
 
+## Parkir Tipo 600
+
+`parkir.html` is a parking game built on the same car model: open
+`/v12/parkir.html`. Six levels (nose-in, reverse, parallel, cone slalom, a
+narrow garage and a dead-end turnaround), three stars per level for a clean,
+quick park. The car follows a bicycle model about its rear axle, so it turns
+the way a real one does; parked cars, kerbs, walls and bollards are solid and
+cones can be knocked over. Three hits and the run is over. The interface is in
+Indonesian.
+
+Keys: `W`/`↑` gas, `S`/`↓` brake then reverse, `A` `D` steer, `Space`
+handbrake, `C` camera (chase or top-down), `R` restart, `M` sound, `Esc` level
+list. On touch screens there are steering and pedal pads.
+
 ## How the engine is modelled
 
 | | |
@@ -115,6 +129,8 @@ v12/
   js/ui.js              controls and telemetry
   js/audio.js           engine note synthesis
   js/main.js            boot and main loop
+  parkir.html           the parking game page
+  js/parkir.js          the parking game: levels, physics, collisions, HUD
   vendor/               three.js r170 with the addons used, as one ES module
 ```
 
