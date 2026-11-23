@@ -114,14 +114,14 @@ export const FINISHES = {
   paint: {
     label: 'Paint', subject: 'car',
     options: [
-      { id: 'rosso', name: 'Rosso corsa', color: '#a80d16', metal: 0.2 },
+      { id: 'rosso', name: 'Rosso corsa', color: '#a00c14', metal: 0.05 },
       { id: 'scuro', name: 'Rosso scuro', color: '#5e0709', metal: 0.4 },
       { id: 'blu', name: 'Blu notte', color: '#0b1c46', metal: 0.45 },
       { id: 'verde', name: 'Verde scuro', color: '#0a2c20', metal: 0.4 },
       { id: 'grigio', name: 'Grigio titanio', color: '#3f4247', metal: 0.6 },
       { id: 'argento', name: 'Argento', color: '#aeb1b6', metal: 0.7 },
-      { id: 'bianco', name: 'Bianco perla', color: '#dedcd4', metal: 0.3 },
-      { id: 'giallo', name: 'Giallo', color: '#cf9d06', metal: 0.2 },
+      { id: 'bianco', name: 'Bianco perla', color: '#dedcd4', metal: 0.25 },
+      { id: 'giallo', name: 'Giallo', color: '#cf9d06', metal: 0.05 },
       { id: 'nero', name: 'Nero', color: '#070708', metal: 0.4 },
     ],
   },

@@ -10,7 +10,7 @@ import * as THREE from '../vendor/three.bundle.min.js';
 
 export const CAR = {
   rear: -2260, front: 2390, wheelbase: 2720,
-  axle: { f: { x: 1360, y: 350, R: 392, track: 840, tyreR: 350, tyreW: 275, rimR: 254 }, r: { x: -1360, y: 362, R: 406, track: 832, tyreR: 362, tyreW: 315, rimR: 267 } },
+  axle: { f: { x: 1360, y: 350, R: 384, track: 840, tyreR: 350, tyreW: 275, rimR: 254 }, r: { x: -1360, y: 362, R: 398, track: 832, tyreR: 362, tyreW: 315, rimR: 267 } },
   cowl: 700, header: 130, rearHeader: -650, glassBase: -1620, tail: -1750,
   door: [-560, 640], hood: [735, 2190], sideGlass: [-1060, 640],
   engine: [1020, 330, 0],
@@ -89,7 +89,7 @@ export function section(x) {
   for (let k = 0; k < ND; k++) {
     const t = k / (ND - 1);
     const p = bez([wr, yr], [wr * 0.72, yr + (yt - yr) * 0.78], [wr * 0.42, yt], [0, yt], t);
-    if (hb > 0) p[1] += hb * Math.exp(-((p[0] / 300) ** 2));
+    if (hb > 0) p[1] += hb * Math.exp(-((p[0] / 300) ** 2)) + hb * 0.2 * Math.exp(-(((p[0] - 372) / 30) ** 2));
     pts.push(p);
   }
   return pts;
@@ -235,8 +235,12 @@ export function buildBody(M) {
 
   // ---- nose and tail: fill the open ends -----------------------------------
   const endCap = (i, front) => {
-    const xe = X[i], K = 12, b = bow(xe), q = new THREE.Vector3();
-    const pt = (j, s) => { const z = P[i][j].z * s; return new THREE.Vector3(xe - b * (z / BOW_REF) ** 2, P[i][j].y, z); };
+    const xe = X[i], K = 14, b = bow(xe), q = new THREE.Vector3();
+    // the nose opening is set back behind a dark reveal; the tail is flush
+    const pt = (j, s) => {
+      const zj = P[i][j].z, z = zj * s, back = front && zj > 1 ? 52 * Math.min(1, (1 - Math.abs(s)) * 7) : 0;
+      return new THREE.Vector3(xe - b * (z / BOW_REF) ** 2 - back, P[i][j].y, z);
+    };
     const nrm = z => q.set(1, 0, 2 * b * z / (BOW_REF * BOW_REF)).normalize().multiplyScalar(front ? 1 : -1).clone();
     for (let j = 0; j < J.N - 1; j++) {
       if (Math.abs(P[i][j].y - P[i][j + 1].y) < 0.5 && j < J.B) continue;
@@ -245,7 +249,7 @@ export function buildBody(M) {
         const p = front ? [pt(j, s0), pt(j + 1, s0), pt(j + 1, s1), pt(j, s1)] : [pt(j, s0), pt(j, s1), pt(j + 1, s1), pt(j + 1, s0)];
         const n = p.map(v => nrm(v.z));
         const ym = (P[i][j].y + P[i][j + 1].y) / 2;
-        const mat = front ? 'grille' : ym < 548 ? 'carUnder' : 'paint';
+        const mat = front ? (k === 0 || k === K - 1 ? 'gloss' : 'grille') : ym < 548 ? 'carUnder' : 'paint';
         quad(bucket('body', mat), 1, p, n);
       }
     }
@@ -298,6 +302,49 @@ export function buildBody(M) {
   // bright surround to the side glass, and the grille frame
   ribbon('body', 'chrome', ...alongRow(J.C, CAR.sideGlass[0] + 10, 640), 9, 1.2);
   ribbon('body', 'chrome', ...alongStation(CAR.front, J.B, J.N - 1), 16, 1.5);
+  // wheel-arch returns: the skin turns inwards at the arch, so the wing has an edge
+  for (const a of [CAR.axle.f, CAR.axle.r]) {
+    const edge = [];
+    for (let i = 1; i < NU - 1; i++) {
+      if (Math.abs(X[i] - a.x) > a.R + 140) continue;
+      for (let j = J.B; j < J.C - 1; j++) {
+        if (!inside[i][j]) continue;
+        if (inside[i - 1][j] && inside[i + 1][j] && inside[i][j + 1] && (j === J.B || inside[i][j - 1])) continue;
+        const p = P[i][j], dx = p.x - a.x, dy = p.y - a.y;
+        edge.push({ p, ang: dy >= -0.5 ? Math.atan2(dy, dx) : (dx > 0 ? dy / a.R : Math.PI - dy / a.R) });
+      }
+    }
+    edge.sort((u, v) => u.ang - v.ang);
+    const line = [];
+    for (const e of edge) if (!line.length || line[line.length - 1].distanceTo(e.p) > 9) line.push(e.p);
+    const c = new THREE.Vector3(a.x, a.y, 0), nIn = [];
+    for (const p of line) nIn.push(p.y >= a.y ? new THREE.Vector3(a.x - p.x, a.y - p.y, 0).normalize() : new THREE.Vector3(Math.sign(a.x - p.x), 0, 0));
+    for (const sz of [1, -1]) {
+      const bk = bucket('body', 'paint');
+      for (let k = 0; k < line.length - 1; k++) {
+        const p = [line[k], line[k + 1], line[k + 1].clone().setZ(line[k + 1].z - 42), line[k].clone().setZ(line[k].z - 42)];
+        const n = [nIn[k], nIn[k + 1], nIn[k + 1], nIn[k]];
+        quad(bk, sz, p, n); tri(bk, sz, p, n, [0, 2, 1]); tri(bk, sz, p, n, [0, 3, 2]);
+      }
+    }
+  }
+  // louvres in the bonnet outlets and the wing vents
+  for (let x = 1495; x < 1770; x += 46) ribbon('hood', 'gloss', ...alongStation(x, J.D + 6, J.D + 10), 22, 5);
+  for (const r of [9, 11, 13, 15]) ribbon('body', 'gloss', ...alongRow(J.B + r, 794, 922), 13, 4);
+  // horizontal bars across the grille, standing proud of the mesh
+  {
+    const i = NU - 1, b = bow(X[i]);
+    for (const y of [292, 340, 388]) {
+      let w = 0;
+      for (let j = J.B; j < J.N; j++) if (Math.abs(P[i][j].y - y) < 22) w = Math.max(w, P[i][j].z);
+      const pts = [], nr = [];
+      for (let k = 0; k <= 24; k++) {
+        const z = (w - 30) * (-1 + 2 * k / 24);
+        pts.push(new THREE.Vector3(X[i] - b * (z / BOW_REF) ** 2 - 30, y, z)); nr.push(new THREE.Vector3(1, 0, 2 * b * z / (BOW_REF * BOW_REF)).normalize());
+      }
+      ribbon('body', 'gloss', pts, nr, 13, 0, false);
+    }
+  }
   // number-plate recess across the back
   {
     const i = 0, j = J.B + 14, b = bow(X[i]), pts = [], nr = [];

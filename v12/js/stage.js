@@ -1,7 +1,7 @@
 // Studio: renderer, lighting, floor, post-processing, camera rig, render modes
 // (studio / x-ray / capped section), picking and highlighting.
 import * as THREE from '../vendor/three.bundle.min.js';
-import { OrbitControls, EffectComposer, RenderPass, UnrealBloomPass, OutputPass, Reflector } from '../vendor/three.bundle.min.js';
+import { OrbitControls, EffectComposer, RenderPass, UnrealBloomPass, OutputPass, ShaderPass, Reflector } from '../vendor/three.bundle.min.js';
 import * as Tx from './textures.js';
 
 const BG = '#0a0b0d';
@@ -64,29 +64,47 @@ export function createStage(container, M, engine, car, { lite = false } = {}) {
   camera.layers.enable(1);
 
   // ----------------------------------------------------- environment light
-  // A softbox studio built from emissive panels and prefiltered once.
+  // Two softbox studios built from emissive panels and prefiltered once each.
+  // The engine wants light from everywhere so rough castings read as metal;
+  // paintwork wants a dark room with a few long, clean light sources to mirror.
+  const ENV = {};
   {
-    const env = new THREE.Scene();
-    const panel = (w, h, pos, look, col, k) => {
-      const c = new THREE.Color(col).multiplyScalar(k);
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide }));
-      m.position.set(...pos); m.lookAt(...look); env.add(m);
-    };
-    env.add(new THREE.Mesh(new THREE.BoxGeometry(80, 50, 80), new THREE.MeshBasicMaterial({ color: '#07080a', side: THREE.BackSide })));
-    panel(22, 10, [0, 15, 2], [0, 0, 0], '#fff6ea', 4.0);          // overhead key
-    panel(3.2, 16, [-17, 5, 9], [0, 1, 0], '#cfe0ff', 7.5);        // cool strip, left
-    panel(3.2, 16, [17, 5, -8], [0, 1, 0], '#ffe2c0', 6.0);        // warm strip, right
-    panel(26, 2.2, [0, 9, -18], [0, 1, 0], '#ffffff', 8.5);        // rim bar behind
-    panel(40, 14, [0, 5, 24], [0, 2, 0], '#aab4c8', 1.25);         // broad fills all round,
-    panel(40, 14, [0, 5, -24], [0, 2, 0], '#9aa3b6', 0.9);         // so flanks and undersides
-    panel(40, 14, [26, 5, 0], [0, 2, 0], '#b8b2a8', 1.1);          // of rough castings still
-    panel(40, 14, [-26, 5, 0], [0, 2, 0], '#a2acc0', 0.9);         // read as metal
-    panel(60, 60, [0, -6, 0], [0, 10, 0], '#24262b', 1.0);         // floor bounce
     const pmrem = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmrem.fromScene(env, 0.035).texture;
-    scene.environmentIntensity = 1.0;
+    const make = (wall, panels) => {
+      const env = new THREE.Scene();
+      env.add(new THREE.Mesh(new THREE.BoxGeometry(80, 50, 80), new THREE.MeshBasicMaterial({ color: wall, side: THREE.BackSide })));
+      for (const [w, h, pos, look, col, k] of panels) {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(col).multiplyScalar(k), side: THREE.DoubleSide }));
+        m.position.set(...pos); m.lookAt(...look); env.add(m);
+      }
+      const t = pmrem.fromScene(env, 0.03).texture;
+      env.traverse(o => { o.geometry?.dispose(); o.material?.dispose(); });
+      return t;
+    };
+    ENV.engine = make('#07080a', [
+      [22, 10, [0, 15, 2], [0, 0, 0], '#fff6ea', 4.0],          // overhead key
+      [3.2, 16, [-17, 5, 9], [0, 1, 0], '#cfe0ff', 7.5],        // cool strip, left
+      [3.2, 16, [17, 5, -8], [0, 1, 0], '#ffe2c0', 6.0],        // warm strip, right
+      [26, 2.2, [0, 9, -18], [0, 1, 0], '#ffffff', 8.5],        // rim bar behind
+      [40, 14, [0, 5, 24], [0, 2, 0], '#aab4c8', 1.25],         // broad fills all round
+      [40, 14, [0, 5, -24], [0, 2, 0], '#9aa3b6', 0.9],
+      [40, 14, [26, 5, 0], [0, 2, 0], '#b8b2a8', 1.1],
+      [40, 14, [-26, 5, 0], [0, 2, 0], '#a2acc0', 0.9],
+      [60, 60, [0, -6, 0], [0, 10, 0], '#24262b', 1.0],         // floor bounce
+    ]);
+    ENV.car = make('#030304', [
+      [34, 7, [0, 12, 0], [0, 0, 0], '#fff8ef', 2.5],           // long overhead bank: the line down bonnet and roof
+      [36, 1.5, [0, 0.6, 17], [0, -0.5, 0], '#eef3ff', 3.6],    // horizon strips: the line along each flank
+      [36, 1.5, [0, 0.6, -17], [0, -0.5, 0], '#fff1e0', 3.2],
+      [36, 5, [0, 7, 20], [0, 0, 0], '#c9d3e6', 0.55],          // soft upper side fill
+      [36, 5, [0, 7, -20], [0, 0, 0], '#e2d8c8', 0.5],
+      [9, 4, [24, 3, 0], [0, 0, 0], '#ffffff', 1.3],            // nose and tail cards
+      [9, 4, [-24, 4, 0], [0, 0, 0], '#dfe6f2', 1.0],
+      [60, 60, [0, -6, 0], [0, 10, 0], '#16171a', 0.7],
+    ]);
     pmrem.dispose();
-    env.traverse(o => { o.geometry?.dispose(); o.material?.dispose(); });
+    scene.environment = ENV.engine;
+    scene.environmentIntensity = 1.0;
   }
 
   const key = new THREE.DirectionalLight('#fff3e2', 2.4);
@@ -132,6 +150,11 @@ export function createStage(container, M, engine, car, { lite = false } = {}) {
   shadowCatcher.rotation.x = -Math.PI / 2; shadowCatcher.position.y = FLOOR_Y + 0.003; shadowCatcher.receiveShadow = true;
   shadowCatcher.renderOrder = 1;
   floorG.add(shadowCatcher);
+  // soft ambient shadow pooled under the car, so it sits on the floor
+  const contactTex = new THREE.CanvasTexture(Tx.radial('rgba(0,0,0,0.92)', 'rgba(0,0,0,0)', 256, 0.3));
+  const contact = new THREE.Mesh(new THREE.PlaneGeometry(13.2, 6.4), new THREE.MeshBasicMaterial({ map: contactTex, transparent: true, depthWrite: false, toneMapped: false }));
+  contact.rotation.x = -Math.PI / 2; contact.position.y = FLOOR_Y + 0.006; contact.renderOrder = 2; contact.visible = false;
+  floorG.add(contact);
   function setMirror(on) {
     if (on && !mirror) {
       const size = mobile ? 512 : 1024;
@@ -173,6 +196,15 @@ export function createStage(container, M, engine, car, { lite = false } = {}) {
   const composer = new EffectComposer(renderer, rt);
   composer.setPixelRatio(pixelRatio);
   composer.addPass(new RenderPass(scene, camera));
+  // Cap highlight energy before the bloom: a lacquered panel under a point
+  // light returns a few pixels thousands of times brighter than anything else,
+  // and unbounded they bloom into a white smear.
+  const limiter = new ShaderPass({
+    uniforms: { tDiffuse: { value: null }, uMax: { value: 24 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform sampler2D tDiffuse; uniform float uMax; varying vec2 vUv; void main(){ vec4 c = texture2D(tDiffuse, vUv); gl_FragColor = vec4(min(c.rgb, vec3(uMax)), c.a); }',
+  });
+  composer.addPass(limiter);
   const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.2, 0.5, 1.7);
   composer.addPass(bloom);
   bloom.enabled = !lite;
@@ -332,8 +364,14 @@ export function createStage(container, M, engine, car, { lite = false } = {}) {
     subject = next;
     if (next === 'car') { car.engineMount.add(engine.root); engine.root.scale.setScalar(1); }
     else { scene.add(engine.root); engine.root.scale.setScalar(0.01); }
-    car.root.visible = next === 'car';
+    car.root.visible = contact.visible = next === 'car';
     engine.root.visible = true;
+    scene.environment = ENV[next];
+    key.intensity = next === 'car' ? 1.7 : 2.4;
+    rim.intensity = next === 'car' ? 0.5 : 0.9;
+    bloom.threshold = next === 'car' ? 2.9 : 1.7;      // on the car only the lamps should glow
+    bloom.strength = next === 'car' ? 0.3 : 0.2;
+    limiter.uniforms.uMax.value = next === 'car' ? 4.2 : 24;
     Object.assign(frame, FRAMES[next]);
     controls.minDistance = next === 'car' ? 3.2 : 5;
     setMode(mode);

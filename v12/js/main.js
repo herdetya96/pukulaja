@@ -65,7 +65,8 @@ async function boot() {
     stage.setExploded(state.subject === 'engine' && e > 0.04);
   };
   const setLamps = on => {
-    M.drl.emissiveIntensity = on ? 2.8 : 0.04; M.tailLit.emissiveIntensity = on ? 1.9 : 0.06; M.tail.emissiveIntensity = on ? 0.25 : 0.02; M.lampLens.emissiveIntensity = on ? 1.1 : 0.02;
+    M.drl.emissiveIntensity = on ? 6 : 0.04; M.tailLit.emissiveIntensity = on ? 1.5 : 0.05; M.tail.emissiveIntensity = on ? 0.25 : 0.02; M.lampLens.emissiveIntensity = on ? 3.4 : 0.02;
+    M.amber.emissiveIntensity = on ? 0.5 : 0.02;
     stage.syncClipped();
   };
 

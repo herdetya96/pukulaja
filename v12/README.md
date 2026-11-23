@@ -45,6 +45,11 @@ the same running model.
   and a steering wheel that turns.
 - **Configure** – paint, roof, wheel finish, caliper colour and leather, plus
   the engine's own finishes.
+- **Realism** – the car has its own studio lighting (a dark room with a long
+  overhead bank and horizon strips, so paint mirrors clean lines), lacquered
+  paint with metallic flake, a soft contact shadow, wheel-arch returns so the
+  wings have an edge, a recessed grille behind bars, louvred outlets, parking
+  sensors, repeaters, a registration plate, heat shielding and a rev counter.
 - **Open it up** – raise the bonnet, swing the doors, switch the lamps, steer
   the front wheels, and pick a gear to turn the rear wheels at road speed.
 - **X-ray** ghosts the bodywork to show the rolling chassis; **Section** cuts

@@ -70,9 +70,10 @@ export function createMaterials() {
   // ---- car ----
   const hexMap = T.tex(T.hexMesh(), { srgb: true, repeat: [1.1, 1.27] });
   const phys = o => new THREE.MeshPhysicalMaterial(o);
+  const flakeMap = T.tex(T.flake(), { repeat: [22, 22] });
   Object.assign(M, {
-    paint: phys({ color: '#7d0a0c', metalness: 0.35, roughness: 0.46, clearcoat: 1, clearcoatRoughness: 0.035, envMapIntensity: 0.85 }),
-    roof: phys({ color: '#7d0a0c', metalness: 0.35, roughness: 0.46, clearcoat: 1, clearcoatRoughness: 0.035 }),
+    paint: phys({ color: '#7d0a0c', metalness: 0.2, roughness: 0.5, clearcoat: 1, clearcoatRoughness: 0.03, normalMap: flakeMap, normalScale: new THREE.Vector2(0.14, 0.14) }),
+    roof: phys({ color: '#7d0a0c', metalness: 0.2, roughness: 0.5, clearcoat: 1, clearcoatRoughness: 0.03, normalMap: flakeMap, normalScale: new THREE.Vector2(0.14, 0.14) }),
     carGlass: phys({ color: '#05080b', metalness: 0, roughness: 0.02, transparent: true, opacity: 0.66, depthWrite: false, envMapIntensity: 1.6 }),
     gloss: std({ color: '#050506', metalness: 0.2, roughness: 0.1 }),
     carUnder: std({ color: '#0a0a0b', metalness: 0, roughness: 0.88 }),
@@ -81,14 +82,18 @@ export function createMaterials() {
     vent: std({ color: '#ffffff', metalness: 0.5, roughness: 0.55, map: hexMap }),
     grille: std({ color: '#ffffff', metalness: 0.5, roughness: 0.5, map: hexMap }),
     lens: std({ color: '#0b0d12', metalness: 0.5, roughness: 0.04 }),
-    lampGlass: phys({ color: '#dfe8f0', metalness: 0, roughness: 0.03, transparent: true, opacity: 0.2, depthWrite: false, envMapIntensity: 1.7 }),
-    lampBucket: std({ color: '#0c0d10', metalness: 0.9, roughness: 0.34 }),
-    lampLens: std({ color: '#f4f8ff', metalness: 0.9, roughness: 0.05, emissive: '#dfeaff', emissiveIntensity: 1.1 }),
+    lampGlass: phys({ color: '#c9d6e2', metalness: 0, roughness: 0.03, transparent: true, opacity: 0.1, depthWrite: false, envMapIntensity: 1.7 }),
+    lampBucket: std({ color: '#060709', metalness: 0.7, roughness: 0.4 }),
+    amber: std({ color: '#ff9a1a', emissive: '#ff7a00', emissiveIntensity: 0.5, metalness: 0, roughness: 0.25 }),
+    plate: std({ color: '#ffffff', metalness: 0, roughness: 0.5, map: T.tex(T.regPlate(), { srgb: true }) }),
+    tacho: new THREE.MeshBasicMaterial({ map: T.tex(T.tacho(), { srgb: true }) }),
+    heatShield: std({ color: '#c9b37a', metalness: 1, roughness: 0.32, bumpMap: castBumpUnit, bumpScale: 1.2 }),
+    lampLens: std({ color: '#f4f8ff', metalness: 0.9, roughness: 0.05, emissive: '#dfeaff', emissiveIntensity: 3.4 }),
     capBadge: std({ color: '#e0b000', metalness: 0.3, roughness: 0.3 }),
     quilt: std({ color: '#17181a', metalness: 0, roughness: 0.92, bumpMap: T.tex(T.quilt(), { repeat: [5, 5] }), bumpScale: 6 }),
     tail: std({ color: '#3a0306', metalness: 0.3, roughness: 0.08, emissive: '#ff1408', emissiveIntensity: 0.25 }),
-    drl: std({ color: '#ffffff', emissive: '#e4ecff', emissiveIntensity: 2.8, side: THREE.DoubleSide }),
-    tailLit: std({ color: '#b00804', emissive: '#ff0a03', emissiveIntensity: 1.9, side: THREE.DoubleSide }),
+    drl: std({ color: '#ffffff', emissive: '#e4ecff', emissiveIntensity: 6, side: THREE.DoubleSide }),
+    tailLit: std({ color: '#5a0000', emissive: '#e60000', emissiveIntensity: 1.5, side: THREE.DoubleSide }),
     gap: std({ color: '#020202', metalness: 0, roughness: 1 }),
     chrome: std({ color: '#eceef2', metalness: 1, roughness: 0.05 }),
     mirror: std({ color: '#dfe6ee', metalness: 1, roughness: 0.02 }),
@@ -102,7 +107,7 @@ export function createMaterials() {
     damper: std({ color: '#c9a227', metalness: 1, roughness: 0.3 }),
     coilSpring: std({ color: '#b3120e', metalness: 0.4, roughness: 0.4 }),
     radiator: std({ color: '#ffffff', metalness: 0.8, roughness: 0.5, map: T.tex(T.fins(), { srgb: true, repeat: [1, 60] }) }),
-    leather: std({ color: '#8a4b25', metalness: 0, roughness: 0.52 }),
+    leather: std({ color: '#8a4b25', metalness: 0, roughness: 0.5, bumpMap: castBumpUnit, bumpScale: 1.6 }),
     alcantara: std({ color: '#17181a', metalness: 0, roughness: 0.97 }),
     carpet: std({ color: '#0e0e10', metalness: 0, roughness: 1 }),
     screen: new THREE.MeshBasicMaterial({ map: T.tex(T.cluster(), { srgb: true }) }),
@@ -166,7 +171,8 @@ export function applyFinish(M, group, id) {
   } else if (group === 'intake') {
     if (!opt.airbox) { M.stack.color.copy(col); M.stack.roughness = opt.rough; }
   } else if (group === 'paint') {
-    M.paint.color.copy(col); M.paint.metalness = opt.metal ?? 0.35; M.paint.roughness = opt.rough ?? 0.46;
+    M.paint.color.copy(col); M.paint.metalness = opt.metal ?? 0.2; M.paint.roughness = opt.rough ?? 0.5;
+    M.paint.normalScale.setScalar(0.06 + 0.2 * M.paint.metalness); M.roof.normalScale.copy(M.paint.normalScale);
     if (!M.roof.userData.contrast) { M.roof.color.copy(col); M.roof.metalness = M.paint.metalness; M.roof.roughness = M.paint.roughness; }
   } else if (group === 'roof') {
     M.roof.userData.contrast = !!opt.contrast;

@@ -97,6 +97,10 @@ function buildWheel(M, a, front, calAngle) {
   }
   B.add(extrudeZ(disc, zd - 17, zd + 17, 1, 8), 'disc');
   B.add(lathe([[dR * 0.57, zd - 6], [dR * 0.57, zd + 20], [88, zd + 44], [60, zd + 46]], 40, 40), 'steelDark', TO_Z);
+  for (let k = 0; k < 10; k++) {
+    const an = k / 10 * Math.PI * 2;
+    B.add(cylZ(5, 6, 6), 'steel', T(dR * 0.5 * Math.cos(an), dR * 0.5 * Math.sin(an), zd + 22));
+  }
   const dg = B.build(); spin.add(dg);
 
   // six-piston caliper and the upright behind it: these do not turn
@@ -189,8 +193,22 @@ export function buildCar(M) {
     const nb = body.at(CAR.front - 60, body.J.N - 1);
     P.add(cylY(34, 5, 32), 'chrome', alignY([0.4, 1, 0], [nb.p.x, nb.p.y + 1, 0]));
     P.add(cylY(27, 6, 32), 'caliper', alignY([0.4, 1, 0], [nb.p.x, nb.p.y + 1.6, 0]));
-    const plate = new THREE.PlaneGeometry(330, 84); plate.rotateY(-Math.PI / 2);
-    P.add(plate, 'badge', T(CAR.rear - 3, body.plateY, 0));
+    const plate = new THREE.PlaneGeometry(250, 64); plate.rotateY(-Math.PI / 2);
+    P.add(plate, 'badge', T(CAR.rear - 3, 748, 0));
+    const reg2 = new THREE.PlaneGeometry(520, 112); reg2.rotateY(-Math.PI / 2);
+    P.add(reg2, 'plate', T(CAR.rear - 4, body.plateY, 0));
+    P.add(rb(4, 124, 532, 2), 'gap', T(CAR.rear - 1.5, body.plateY, 0));
+    for (const s of [1, -1]) {
+      // parking sensors, flush in both bumpers
+      for (const [x, r] of [[2335, 10], [2215, 8], [-2215, 9]]) {
+        const q = body.at(x, body.J.B + r);
+        P.add(cylY(9, 2.4, 14), 'gap', alignY([q.n.x, q.n.y, s * q.n.z], [q.p.x + q.n.x, q.p.y + q.n.y, s * (q.p.z + q.n.z)]));
+      }
+      P.add(cylX(9, 2.4, 14), 'gap', T(CAR.rear - bowAt(CAR.rear, 250) - 1, 500, s * 250));
+      // amber repeater on the mirror
+      const m = body.at(520, body.J.C);
+      P.add(rb(70, 7, 6, 2), 'amber', T(m.p.x + 86, m.p.y + 104, s * (m.p.z + 150)));
+    }
     const g = P.build(); shell.add(g); reg('body', g);
 
     const L = new Part('lights', M);
@@ -214,7 +232,7 @@ export function buildCar(M) {
         L.add(new THREE.TorusGeometry(22, 3.2, 8, 28), 'chrome', alignY(n.toArray(), c.clone().addScaledVector(n, 6).toArray()).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)));
       }
     }
-    L.add(rb(8, 34, 150, 4), 'tailLit', T(CAR.rear - 4, 420, 0));
+    L.add(rb(8, 34, 150, 4), 'tail', T(CAR.rear - 4, 420, 0));
     const lg = L.build({ cast: false }); shell.add(lg); reg('lights', lg);
   }
 
@@ -289,6 +307,9 @@ export function buildCar(M) {
     rod(P, V(150, 1172, -585), V(150, 1172, 585), 22, 'carbon');
     rod(P, V(-640, 1207, -560), V(-640, 1207, 560), 22, 'carbon');
     P.add(cylZ(28, 1380, 20), 'machined', T(560, 800, 0));
+    // reflective heat shielding: tunnel roof and the engine side of the bulkhead
+    P.add(rb(1480, 4, 372, 2), 'heatShield', T(-150, 399, 0));
+    P.add(rb(5, 430, 1120, 2), 'heatShield', T(627, 500, 0));
     const g = P.build(); root.add(g); reg('tub', g);
     anchor('tub', g, [-160, 420, 770], 'Carbon tub', [0, 0.2, 1], 'r', true);
   }
@@ -364,6 +385,10 @@ export function buildCar(M) {
         // track rod
         const ox = front ? 140 : -150;
         rod(P, V(a.x + ox, a.y - 30, s * (zt - 6)), V(a.x + ox, a.y - 40, s * 330), 10, 'steel');
+      }
+      for (const s of [1, -1]) {
+        const bx2 = a.x + (front ? 180 : -180);
+        rod(P, V(bx2, a.y - 110, s * 640), V(a.x + (front ? 60 : -60), a.y - 165, s * (a.track - 190)), 7, 'steel', 8);
       }
       // anti-roll bar
       const bx = a.x + (front ? 330 : -330);
@@ -496,6 +521,13 @@ export function buildCar(M) {
     // parcel shelf, carpet, mirror
     P.add(rb(700, 24, 1240, 10), 'alcantara', mat4({ p: [-1260, 902, 0], r: [0, 0, -0.07] }));
     P.add(rb(1460, 8, 1250, 3), 'carpet', T(-150, 170, 0));
+    for (const z of [700, -700]) { P.add(rb(700, 5, 96, 2), 'carbon', T(20, 417, z)); P.add(rb(420, 3, 20, 1), 'chrome', T(20, 420, z)); }
+    for (const z of [330, -330]) P.add(rb(14, 120, 330, 5), 'alcantara', mat4({ p: [176, 1160, z], r: [0, 0, 1.25] }));
+    P.add(rb(30, 210, 120, 8), 'machined', mat4({ p: [520, 290, -640], r: [0, 0, 0.6] }));
+    // central rev counter standing proud of the display
+    P.add(cylX(62, 16, 40), 'gloss', mat4({ p: [350, 874, -425], r: [0, 0, 0.16] }));
+    const dial = new THREE.CircleGeometry(56, 40); dial.rotateY(-Math.PI / 2);
+    P.add(dial, 'tacho', mat4({ p: [341, 874, -425], r: [0, 0, 0.16] }));
     P.add(rb(30, 60, 210, 12), 'gloss', T(170, 1180, 0));
     for (const z of [-470, -390, -300]) P.add(rb(16, 150, 60, 6), 'machined', mat4({ p: [470, 300, z], r: [0, 0, 0.5] }));
     cab.add(P.build());

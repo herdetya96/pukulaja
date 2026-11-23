@@ -270,6 +270,47 @@ export function quilt() {
   return c;
 }
 
+// Rear registration plate.
+export function regPlate(text = 'TP 600 GT') {
+  const [c, g] = canvas(520, 112);
+  g.fillStyle = '#eceae2'; g.fillRect(0, 0, 520, 112);
+  g.strokeStyle = '#111'; g.lineWidth = 4; g.strokeRect(4, 4, 512, 104);
+  g.fillStyle = '#1a3a8c'; g.fillRect(6, 6, 44, 100);
+  g.fillStyle = '#111'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = '700 74px "JetBrains Mono", ui-monospace, "Courier New", monospace';
+  g.fillText(text, 284, 60, 440);
+  return c;
+}
+
+// Rev counter face: yellow, redline from 9.
+export function tacho() {
+  const s = 256, [c, g] = canvas(s, s), R = s / 2;
+  g.fillStyle = '#e0b000'; g.beginPath(); g.arc(R, R, R, 0, 7); g.fill();
+  g.strokeStyle = '#111'; g.fillStyle = '#111'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = '700 26px "JetBrains Mono", ui-monospace, monospace';
+  for (let k = 0; k <= 10; k++) {
+    const a = Math.PI * (0.75 + 1.5 * k / 10), cs = Math.cos(a), sn = Math.sin(a);
+    g.lineWidth = 5; g.strokeStyle = k >= 9 ? '#b00' : '#111';
+    g.beginPath(); g.moveTo(R + cs * R * 0.92, R + sn * R * 0.92); g.lineTo(R + cs * R * 0.78, R + sn * R * 0.78); g.stroke();
+    g.fillStyle = k >= 9 ? '#b00' : '#111'; g.fillText(String(k), R + cs * R * 0.6, R + sn * R * 0.6);
+  }
+  g.strokeStyle = '#c0180c'; g.lineWidth = 6; g.lineCap = 'round';
+  const na = Math.PI * (0.75 + 1.5 * 0.1);
+  g.beginPath(); g.moveTo(R, R); g.lineTo(R + Math.cos(na) * R * 0.74, R + Math.sin(na) * R * 0.74); g.stroke();
+  g.fillStyle = '#111'; g.beginPath(); g.arc(R, R, 16, 0, 7); g.fill();
+  return c;
+}
+
+// Metallic flake: tiny random tilts of the surface normal under the lacquer.
+export function flake(size = 128, seed = 5) {
+  const [c, g] = canvas(size, size), r = rng(seed), img = g.createImageData(size, size);
+  for (let i = 0; i < size * size; i++) {
+    img.data[i * 4] = 128 + (r() - 0.5) * 90; img.data[i * 4 + 1] = 128 + (r() - 0.5) * 90; img.data[i * 4 + 2] = 255; img.data[i * 4 + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  return c;
+}
+
 // Radiator core: fine horizontal fins.
 export function fins() {
   const [c, g] = canvas(8, 16);
