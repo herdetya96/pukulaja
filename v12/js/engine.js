@@ -311,7 +311,7 @@ export function buildEngine(M) {
       gas.position.x = c.x; gas.raycast = () => {}; gas.renderOrder = 3;
       g.add(gas);
       const mid = bankToWorld(c.bank, c.x, 150, 0);
-      cyl.push({ ...c, rod, piston, gas, phase: 0, pos: 0, lift: { intake: 0, exhaust: 0 }, cut: false, mid: new THREE.Vector3(mid[0], mid[1], mid[2]).multiplyScalar(0.01) });
+      cyl.push({ ...c, rod, piston, gas, phase: 0, pos: 0, lift: { intake: 0, exhaust: 0 }, cut: false, mid: new THREE.Vector3(mid[0], mid[1], mid[2]) });
     }
   }
 
@@ -372,7 +372,7 @@ export function buildEngine(M) {
       }
       P.bolts(b, 3.4);
       const g = P.build(); reg('cams', g); bg.add(g); ex(g, [0, 330, 0], 0.7);
-      g.userData.ends = [-3.3, 3.3].map(x => { const w = bankToWorld(s, 0, E.camY, 0); return new THREE.Vector3(x, w[1] * 0.01, w[2] * 0.01); });
+      g.userData.ends = [-330, 330].map(x => { const w = bankToWorld(s, 0, E.camY, 0); return new THREE.Vector3(x, w[1], w[2]); });
       for (const kind of ['intake', 'exhaust']) {
         const z = kind === 'intake' ? -E.camZ : E.camZ;
         const tilt = E.valveAngle * DEG;
@@ -442,7 +442,7 @@ export function buildEngine(M) {
         const tau = sg * tilt;
         const w = bankToWorld(s, c.x + dx, E.valveSeatY + 40, sg * E.valveZ);
         set.items.push({
-          cyl: c.n, kind, cut: false, world: new THREE.Vector3(w[0], w[1], w[2]).multiplyScalar(0.01),
+          cyl: c.n, kind, cut: false, world: new THREE.Vector3(w[0], w[1], w[2]),
           seat: new THREE.Vector3(c.x + dx, E.valveSeatY, sg * E.valveZ),
           axis: new THREE.Vector3(0, Math.cos(tau), Math.sin(tau)),
           quat: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), tau),
@@ -818,15 +818,21 @@ export function buildEngine(M) {
   // Section view: drop the per-cylinder moving parts that sit well in front of
   // the cutting plane, so they don't float in the removed half.
   function setCut(plane) {
+    // positions are stored in engine millimetres; the engine may be standing
+    // alone or installed in the car, so measure in world space
+    root.updateWorldMatrix(true, false);
+    const k = root.matrixWorld.getMaxScaleOnAxis(), w = new THREE.Vector3();
+    const far = (p, margin) => !!plane && plane.distanceToPoint(w.copy(p).applyMatrix4(root.matrixWorld)) < -margin * k;
     for (const c of cyl) {
-      c.cut = !!plane && plane.distanceToPoint(c.mid) < -0.5;
+      c.cut = far(c.mid, 50);
       c.piston.userData.cutHidden = c.rod.userData.cutHidden = c.cut;
       c.gas.visible = gasOn && !c.cut;
     }
-    for (const set of valveSets) for (const it of set.items) it.cut = !!plane && plane.distanceToPoint(it.world) < -0.5;
-    for (const o of parts.cams) if (o.userData.ends) o.userData.cutHidden = !!plane && Math.max(...o.userData.ends.map(e => plane.distanceToPoint(e))) < -0.5;
+    for (const set of valveSets) for (const it of set.items) it.cut = far(it.world, 50);
+    for (const o of parts.cams) if (o.userData.ends) o.userData.cutHidden = o.userData.ends.every(e => far(e, 50));
     for (const o of parts.valves) o.userData.cutHidden = false;
-    for (const o of parts.timing) o.userData.cutHidden = !!plane && plane.normal.x * 3.5 + plane.constant < -0.3;
+    const nose = new THREE.Vector3(350, 0, 0);
+    for (const o of parts.timing) o.userData.cutHidden = far(nose, 30);
   }
   function setGas(on) { gasOn = on; for (const c of cyl) c.gas.visible = on && !c.cut; }
 

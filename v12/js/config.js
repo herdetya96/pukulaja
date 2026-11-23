@@ -111,6 +111,53 @@ export const PEAK = (() => {
 
 // --- configurator finishes --------------------------------------------------
 export const FINISHES = {
+  paint: {
+    label: 'Paint', subject: 'car',
+    options: [
+      { id: 'rosso', name: 'Rosso profondo', color: '#7d0a0c', metal: 0.3 },
+      { id: 'blu', name: 'Blu notte', color: '#0b1c46', metal: 0.45 },
+      { id: 'verde', name: 'Verde scuro', color: '#0a2c20', metal: 0.4 },
+      { id: 'grigio', name: 'Grigio titanio', color: '#3f4247', metal: 0.6 },
+      { id: 'argento', name: 'Argento', color: '#aeb1b6', metal: 0.7 },
+      { id: 'bianco', name: 'Bianco perla', color: '#dedcd4', metal: 0.3 },
+      { id: 'giallo', name: 'Giallo', color: '#cf9d06', metal: 0.2 },
+      { id: 'nero', name: 'Nero', color: '#070708', metal: 0.4 },
+    ],
+  },
+  roof: {
+    label: 'Roof', subject: 'car',
+    options: [
+      { id: 'body', name: 'Body colour', color: '#8a8d92' },
+      { id: 'black', name: 'Gloss black', color: '#050506', contrast: true },
+    ],
+  },
+  wheels: {
+    label: 'Wheels', subject: 'car',
+    options: [
+      { id: 'silver', name: 'Forged silver', color: '#b9bcc2', rough: 0.2 },
+      { id: 'bright', name: 'Diamond cut', color: '#eceef2', rough: 0.07 },
+      { id: 'black', name: 'Gloss black', color: '#0c0c0d', rough: 0.18, metal: 0.6 },
+      { id: 'bronze', name: 'Satin bronze', color: '#7a6240', rough: 0.34 },
+    ],
+  },
+  calipers: {
+    label: 'Brake calipers', subject: 'car',
+    options: [
+      { id: 'red', name: 'Rosso', color: '#b3120e' },
+      { id: 'yellow', name: 'Giallo', color: '#dba800' },
+      { id: 'blue', name: 'Blu', color: '#1746a0' },
+      { id: 'black', name: 'Nero', color: '#0d0d0e' },
+    ],
+  },
+  interior: {
+    label: 'Leather', subject: 'car',
+    options: [
+      { id: 'cuoio', name: 'Cuoio', color: '#8a4b25' },
+      { id: 'crema', name: 'Crema', color: '#c2b092' },
+      { id: 'rosso', name: 'Rosso', color: '#6a0f10' },
+      { id: 'nero', name: 'Nero', color: '#131314' },
+    ],
+  },
   covers: {
     label: 'Cam covers',
     options: [
@@ -152,7 +199,106 @@ export const FINISHES = {
 
 // --- part catalogue ---------------------------------------------------------
 const mm = v => v.toFixed(1) + ' mm';
+export const GEARS = [3.08, 2.19, 1.63, 1.29, 1.03, 0.84, 0.69];
+export const FINAL_DRIVE = 3.73;
+export const TYRE_R = 0.362;          // driven (rear) tyre radius, metres
 export const PARTS = {
+  body: {
+    name: 'Bodywork', layer: 'body',
+    material: 'Aluminium and carbon-fibre panels',
+    specs: [['Length', '4,650 mm'], ['Width', '1,980 mm'], ['Height', '1,272 mm'], ['Wheelbase', '2,720 mm']],
+    text: 'A two-seat fastback with the cabin set well back: the whole engine sits behind the front axle line, which puts just under half the weight on the front wheels.',
+  },
+  bonnet: {
+    name: 'Bonnet', layer: 'body',
+    material: 'Carbon fibre, rear-hinged',
+    specs: [['Vents', 'Two heat extractors']],
+    text: 'A long clamshell with a central bulge to clear the twelve intake trumpets. The extractor vents let hot air out of the bay rather than under the car.',
+  },
+  doors: {
+    name: 'Doors', layer: 'body',
+    material: 'Aluminium skin, frameless glass',
+    specs: [['Opening', '64°']],
+    text: 'Front-hinged doors with frameless side glass and a release set flush into the shoulder line.',
+  },
+  glass: {
+    name: 'Glasshouse', layer: 'glass',
+    material: 'Laminated acoustic glass',
+    specs: [['Screen rake', '62° from vertical']],
+    text: 'A steeply raked screen runs into a long fastback rear window, with the side glass tapering to a point over the rear haunch.',
+  },
+  lights: {
+    name: 'Lighting', layer: 'body',
+    material: 'Matrix LED',
+    specs: [['Front', 'Twin light blades'], ['Rear', 'Full-width bar']],
+    text: 'Slim LED blades follow the fender line at the front; a single light bar wraps the tail.',
+  },
+  aero: {
+    name: 'Aero', layer: 'body',
+    material: 'Carbon fibre',
+    specs: [['Front', 'Splitter with dive planes'], ['Rear', 'Seven-channel diffuser']],
+    text: 'A flat floor feeds the rear diffuser, the splitter balances it at the front, and the ducktail trims lift over the rear axle.',
+  },
+  lining: {
+    name: 'Cabin lining', layer: 'cabin',
+    material: 'Alcantara',
+    specs: [],
+    text: 'Headlining and door cards trimmed in dark Alcantara.',
+  },
+  cabin: {
+    name: 'Cabin', layer: 'cabin',
+    material: 'Leather, Alcantara and carbon fibre',
+    specs: [['Seats', 'Two carbon-shell buckets'], ['Drive', 'Left-hand']],
+    text: 'Two carbon-shell seats either side of a wide tunnel that carries the torque tube and both exhaust runs. The driver sits behind a three-spoke wheel and a single curved display.',
+  },
+  wheels: {
+    name: 'Wheels & tyres', layer: 'wheels',
+    material: 'Forged aluminium, centre-lock',
+    specs: [['Front', '275/35 ZR20'], ['Rear', '315/30 ZR21'], ['Spokes', '10, dished']],
+    text: 'Ten-spoke forged wheels held by a single centre nut. The rears are wider and an inch larger to put the power down.',
+  },
+  brakes: {
+    name: 'Brakes', layer: 'wheels',
+    material: 'Carbon-ceramic discs, monobloc calipers',
+    specs: [['Front discs', '394 mm, drilled'], ['Rear discs', '414 mm, drilled'], ['Calipers', 'Six-piston']],
+    text: 'Drilled carbon-ceramic discs shed heat and unsprung mass. Calipers trail the front axle and lead the rear, keeping their weight inside the wheelbase.',
+  },
+  suspension: {
+    name: 'Suspension', layer: 'chassis',
+    material: 'Forged aluminium wishbones',
+    specs: [['Layout', 'Double wishbones all round'], ['Dampers', 'Coil-over, adjustable'], ['Roll bars', 'Front and rear']],
+    text: 'Unequal-length wishbones at each corner hold the tyre upright as the body rolls. Coil-over dampers act directly on the lower arms.',
+  },
+  tub: {
+    name: 'Carbon tub', layer: 'chassis',
+    material: 'Pre-preg carbon-fibre monocoque',
+    specs: [['Structure', 'Floor, sills, bulkheads, roof hoop'], ['Tunnel', 'Torque tube and exhaust']],
+    text: 'The occupants sit in a single carbon moulding. Aluminium subframes bolt to its bulkheads to carry the engine at the front and the transaxle at the back.',
+  },
+  chassis: {
+    name: 'Subframes & cooling', layer: 'chassis',
+    material: 'Extruded and cast aluminium',
+    specs: [['Front', 'Engine cradle, crash structure, radiator'], ['Bracing', 'Carbon strut brace']],
+    text: 'Aluminium rails run forward from the tub to the crash structure, with cast towers for the dampers. The radiator pack leans forward behind the grille.',
+  },
+  drivetrain: {
+    name: 'Transaxle & torque tube', layer: 'powertrain',
+    material: 'Cast aluminium case',
+    specs: [['Gearbox', '7-speed dual-clutch'], ['Final drive', FINAL_DRIVE.toFixed(2) + ' : 1'], ['Drive', 'Rear wheels']],
+    text: 'The gearbox sits between the rear wheels, joined to the engine by a rigid torque tube. Putting it there balances the weight of the V12 up front.',
+  },
+  exhaustsys: {
+    name: 'Exhaust system', layer: 'powertrain',
+    material: 'Stainless steel',
+    specs: [['Layout', 'Twin system, four tailpipes'], ['Catalysts', 'One per bank']],
+    text: 'Each bank keeps its own pipe from manifold to tailpipe. Both run through the tunnel beside the torque tube and split round the transaxle to a silencer at each corner.',
+  },
+  v12: {
+    name: '6.0 L V12', layer: 'powertrain',
+    material: 'See the engine view for every part',
+    specs: [['Position', 'Front-mid, longitudinal'], ['Output', '589 kW at 8,550 rpm']],
+    text: 'The engine sits entirely behind the front axle. Switch to the engine view to run it in x-ray, section it or take it apart.',
+  },
   crank: {
     name: 'Crankshaft', layer: 'rotating',
     material: 'Forged 42CrMo4 steel, nitrided',
@@ -286,6 +432,15 @@ export const PARTS = {
     text: 'A cradle that holds the engine by its mounts.',
   },
 };
+
+export const CAR_LAYERS = [
+  { id: 'body', name: 'Body panels' },
+  { id: 'glass', name: 'Glass' },
+  { id: 'cabin', name: 'Cabin' },
+  { id: 'wheels', name: 'Wheels & brakes' },
+  { id: 'chassis', name: 'Chassis' },
+  { id: 'powertrain', name: 'Powertrain' },
+];
 
 export const LAYERS = [
   { id: 'intake', name: 'Intake' },

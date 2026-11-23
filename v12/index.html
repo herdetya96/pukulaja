@@ -77,6 +77,16 @@ ul{list-style:none}
 .tool[aria-pressed="true"]{color:var(--amber);border-color:rgba(255,180,84,.5)}
 .tool svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 
+#app[data-subject="car"] [data-for="engine"],#app[data-subject="engine"] [data-for="car"]{display:none!important}
+.segs{display:flex;gap:8px;align-items:center}
+.carbar{grid-column:span 2;display:flex;gap:12px;align-items:center;justify-content:space-between;min-width:0}
+#app[data-mode="section"] .carbar{display:none}
+.chips{display:flex;gap:5px}
+.chip{padding:6px 11px;border-radius:999px;border:1px solid var(--line-strong);font:500 10.5px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--fg-2);white-space:nowrap;transition:color .15s,border-color .15s,background .15s}
+.chip:hover{color:var(--fg)}
+.chip[aria-pressed="true"]{color:#0b0c0e;background:var(--amber);border-color:var(--amber)}
+#gearSeg button{padding:6px 8px;min-width:24px}
+
 /* ---------- panes ---------- */
 #dock{display:contents}
 #tabs{display:none}
@@ -213,7 +223,10 @@ input[type=range]:disabled{opacity:.35;cursor:default}
 @media (max-width:820px){
   #app{display:flex;flex-direction:column}
   #top{position:relative;grid-template-columns:1fr auto;padding:10px var(--gr) 8px var(--gl);gap:8px 10px;background:var(--bg)}
-  #top .seg{grid-column:1/-1;grid-row:2;justify-self:stretch;display:grid;grid-template-columns:repeat(3,1fr);background:var(--raise);-webkit-backdrop-filter:none;backdrop-filter:none}
+  #top .segs{grid-column:1/-1;grid-row:2;display:grid;grid-template-columns:auto 1fr;gap:6px}
+  #top .seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;background:var(--raise);-webkit-backdrop-filter:none;backdrop-filter:none}
+  #top .seg button{padding:8px 9px;letter-spacing:.06em}
+  .carbar{grid-column:1/-1;flex-wrap:wrap}
   .plate h1{font-size:14px}
   .plate p{font-size:9.5px}
   .tool{width:32px;height:32px}
@@ -249,22 +262,28 @@ input[type=range]:disabled{opacity:.35;cursor:default}
 </head>
 <body>
 <!--page-->
-<div id="app" data-mode="studio">
+<div id="app" data-mode="studio" data-subject="car">
   <div id="veil">
     <h1>TIPO 600</h1>
     <div class="bar"></div>
-    <p id="veil-msg">Machining twelve cylinders</p>
+    <p id="veil-msg">Building the car around its V12</p>
   </div>
 
   <header id="top">
     <div class="plate">
       <h1>TIPO <span>600</span></h1>
-      <p>6.0 L · 60° V12 · 48-valve DOHC</p>
+      <p id="plate-sub">GT · 6.0 L V12 · front-mid engine</p>
     </div>
-    <div class="seg" id="modeSeg" role="group" aria-label="View mode">
-      <button data-mode="studio" aria-pressed="true">Studio</button>
-      <button data-mode="xray" aria-pressed="false">X-ray</button>
-      <button data-mode="section" aria-pressed="false">Section</button>
+    <div class="segs">
+      <div class="seg" id="subjectSeg" role="group" aria-label="Subject">
+        <button data-subject-btn="car" aria-pressed="true">Car</button>
+        <button data-subject-btn="engine" aria-pressed="false">Engine</button>
+      </div>
+      <div class="seg" id="modeSeg" role="group" aria-label="View mode">
+        <button data-mode="studio" aria-pressed="true">Studio</button>
+        <button data-mode="xray" aria-pressed="false">X-ray</button>
+        <button data-mode="section" aria-pressed="false">Section</button>
+      </div>
     </div>
     <div class="tools">
       <button class="tool" id="tool-callouts" aria-pressed="true" title="Part callouts" aria-label="Part callouts"><svg viewBox="0 0 24 24"><path d="M4 12V5a1 1 0 0 1 1-1h7l8 8-8 8-8-8Z"/><circle cx="8.5" cy="8.5" r="1.2"/></svg></button>
@@ -284,7 +303,7 @@ input[type=range]:disabled{opacity:.35;cursor:default}
       <button data-view="side">Side</button>
       <button data-view="top">Top</button>
       <button data-view="rear">Rear</button>
-      <button data-view="valley">Intake</button>
+      <button data-view="valley" id="view-six">Engine bay</button>
     </nav>
     <aside id="partcard" class="panel" hidden>
       <button class="x" id="part-close" aria-label="Close">×</button>
@@ -313,12 +332,16 @@ input[type=range]:disabled{opacity:.35;cursor:default}
           <div class="grp-head"><label class="label" for="throttle">Throttle</label><b id="throttle-val">0 %</b></div>
           <input type="range" id="throttle" min="0" max="100" value="0" step="1">
         </div>
-        <div class="grp">
+        <div class="grp" data-for="engine">
           <div class="grp-head"><label class="label" for="crank">Turn by hand</label><b id="crank-val">0°</b></div>
           <input type="range" id="crank" min="0" max="720" value="0" step="1">
         </div>
+        <div class="grp" data-for="car">
+          <div class="grp-head"><label class="label" for="steer">Steering</label><b id="steer-val">0°</b></div>
+          <input type="range" id="steer" min="-32" max="32" value="0" step="1">
+        </div>
         <div class="grp">
-          <div class="grp-head"><label class="label" for="explode">Exploded view</label><b id="explode-val">0 %</b></div>
+          <div class="grp-head"><label class="label" for="explode" id="explode-label">Exploded view</label><b id="explode-val">0 %</b></div>
           <input type="range" id="explode" min="0" max="100" value="0" step="1">
         </div>
         <div class="grp row">
@@ -330,12 +353,22 @@ input[type=range]:disabled{opacity:.35;cursor:default}
             <button data-slow="0.0078125" aria-pressed="false">1/128</button>
           </div>
         </div>
-        <p class="hint">Drag to orbit, scroll to zoom, click any part for its details.</p>
+        <p class="hint" data-for="engine">Drag to orbit, scroll to zoom, click any part for its details.</p>
+        <div class="carbar" data-for="car">
+          <div class="chips" role="group" aria-label="Car">
+            <button class="chip" id="chip-bonnet" aria-pressed="false">Bonnet</button>
+            <button class="chip" id="chip-doors" aria-pressed="false">Doors</button>
+            <button class="chip" id="chip-lights" aria-pressed="true">Lights</button>
+          </div>
+          <div class="seg small" id="gearSeg" role="group" aria-label="Gear">
+            <button data-gear="0" aria-pressed="true">N</button><button data-gear="1" aria-pressed="false">1</button><button data-gear="2" aria-pressed="false">2</button><button data-gear="3" aria-pressed="false">3</button><button data-gear="4" aria-pressed="false">4</button><button data-gear="5" aria-pressed="false">5</button><button data-gear="6" aria-pressed="false">6</button><button data-gear="7" aria-pressed="false">7</button>
+          </div>
+        </div>
         <div class="sec">
           <div class="seg small" id="secSeg" role="group" aria-label="Section plane">
-            <button data-sec="cross" aria-pressed="true">Cross</button>
-            <button data-sec="long" aria-pressed="false">Lengthwise</button>
-            <button data-sec="bank" aria-pressed="false">Bank</button>
+            <button data-sec="long" aria-pressed="true">Lengthwise</button>
+            <button data-sec="cross" aria-pressed="false">Cross</button>
+            <button data-sec="bank" aria-pressed="false" data-for="engine">Bank</button>
           </div>
           <input type="range" id="secPos" min="0" max="1000" value="500" step="1" aria-label="Section position">
         </div>
@@ -366,7 +399,8 @@ input[type=range]:disabled{opacity:.35;cursor:default}
         <div><span class="label">Crank angle</span><b id="st-angle">0°</b></div>
         <div><span class="label">Piston speed</span><b id="st-piston">0.0 m/s</b></div>
         <div><span class="label">Firing rate</span><b id="st-fire">0 Hz</b></div>
-        <div><span class="label">Manifold</span><b id="st-heat">20 °C</b></div>
+        <div data-for="engine"><span class="label">Manifold</span><b id="st-heat">20 °C</b></div>
+        <div data-for="car"><span class="label">Road speed</span><b id="st-speed">0 km/h</b></div>
       </div>
 
       <h2>Firing order</h2>

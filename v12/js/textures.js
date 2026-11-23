@@ -195,4 +195,75 @@ export function radial(inner = 'rgba(0,0,0,1)', outer = 'rgba(0,0,0,0)', size = 
   return c;
 }
 
+// Honeycomb mesh for grilles and vents.
+export function hexMesh(size = 128) {
+  const [c, g] = canvas(size, Math.round(size * 0.866));
+  g.fillStyle = '#050506'; g.fillRect(0, 0, c.width, c.height);
+  g.strokeStyle = '#6b6e74'; g.lineWidth = size * 0.07;
+  const r = size / 4, hgt = r * Math.sqrt(3) / 2;
+  for (let row = -1; row < 4; row++) for (let col = -1; col < 4; col++) {
+    const cx = col * r * 1.5, cy = row * hgt * 2 + (col & 1 ? hgt : 0);
+    g.beginPath();
+    for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; g[k ? 'lineTo' : 'moveTo'](cx + r * Math.cos(a), cy + r * Math.sin(a)); }
+    g.closePath(); g.stroke();
+  }
+  return c;
+}
+
+// Raised sidewall lettering, drawn round a ring.
+export function tyreRing(text = 'TIPO CORSA', size = 1024) {
+  const [c, g] = canvas(size, size);
+  g.clearRect(0, 0, size, size);
+  g.fillStyle = '#58595c';
+  g.font = `700 ${size * 0.05}px "Syncopate", "Arial Black", Arial, sans-serif`;
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  const R = size * 0.432;
+  const put = (str, centre) => {
+    const step = 0.085;
+    [...str].forEach((ch, i) => {
+      const a = centre + (i - (str.length - 1) / 2) * step;
+      g.save(); g.translate(size / 2 + R * Math.sin(a), size / 2 - R * Math.cos(a)); g.rotate(a); g.fillText(ch, 0, 0); g.restore();
+    });
+  };
+  put(text, 0); put(text, Math.PI); put('ZR · 100Y', Math.PI / 2); put('ZR · 100Y', -Math.PI / 2);
+  return c;
+}
+
+// Instrument cluster / centre display.
+export function cluster() {
+  const [c, g] = canvas(512, 160);
+  g.fillStyle = '#04050a'; g.fillRect(0, 0, 512, 160);
+  const dial = (cx, col, frac) => {
+    g.lineWidth = 7; g.strokeStyle = 'rgba(255,255,255,.14)';
+    g.beginPath(); g.arc(cx, 84, 56, Math.PI * 0.8, Math.PI * 2.2); g.stroke();
+    g.strokeStyle = col;
+    g.beginPath(); g.arc(cx, 84, 56, Math.PI * 0.8, Math.PI * (0.8 + 1.4 * frac)); g.stroke();
+  };
+  dial(110, '#ffb454', 0.42); dial(402, '#69b4ff', 0.6);
+  g.fillStyle = '#ece8e0'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = '700 30px "JetBrains Mono", ui-monospace, monospace'; g.fillText('3,800', 110, 86); g.fillText('N', 402, 86);
+  g.font = '700 20px "Syncopate", "Arial Black", sans-serif'; g.fillText('TIPO 600', 256, 60);
+  g.font = '500 15px "JetBrains Mono", ui-monospace, monospace'; g.fillStyle = '#ffb454'; g.fillText('V12 · 6.0', 256, 96);
+  return c;
+}
+
+// Tyre tread: sipes across the shoulders and blocks, plain sidewalls.
+// u runs round the tyre, v across the section from inner bead to outer bead.
+export function tread() {
+  const [c, g] = canvas(64, 256);
+  g.fillStyle = '#808080'; g.fillRect(0, 0, 64, 256);
+  g.strokeStyle = '#1c1c1c'; g.lineWidth = 3.2;
+  const band = (v0, v1, lean) => { for (let x = -32; x < 96; x += 16) { g.beginPath(); g.moveTo(x, v0); g.lineTo(x + lean, v1); g.stroke(); } };
+  band(74, 104, 10); band(112, 126, -6); band(130, 144, 6); band(152, 182, -10);
+  return c;
+}
+
+// Radiator core: fine horizontal fins.
+export function fins() {
+  const [c, g] = canvas(8, 16);
+  g.fillStyle = '#2a2c30'; g.fillRect(0, 0, 8, 16);
+  g.fillStyle = '#7d8087'; g.fillRect(0, 0, 8, 5);
+  return c;
+}
+
 export { tex };

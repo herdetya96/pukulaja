@@ -1,5 +1,5 @@
 // DOM side of the showcase: configurator controls, drive rail, telemetry.
-import { E, CYL, FIRING_ORDER, FINISHES, LAYERS, PARTS, PEAK, torqueAt, powerAt } from './config.js';
+import { E, CYL, FIRING_ORDER, FINISHES, LAYERS, CAR_LAYERS, PARTS, PEAK, torqueAt, powerAt } from './config.js';
 
 const $ = id => document.getElementById(id);
 const NS = 'http://www.w3.org/2000/svg';
@@ -33,7 +33,7 @@ export function createUI(app, state) {
       if (o.airbox) b.setAttribute('data-airbox', '');
       b.addEventListener('click', () => app.setFinish(gid, o.id));
     }
-    row.dataset.group = gid;
+    row.dataset.group = gid; row.dataset.for = grp.subject || 'engine';
   }
   function syncFinishes() {
     for (const row of finWrap.children) {
@@ -46,8 +46,9 @@ export function createUI(app, state) {
   // --------------------------------------------------------------- layers
   const layerWrap = $('layers');
   const layerInputs = {};
-  for (const L of LAYERS) {
-    const lab = el('label', {}, layerWrap);
+  const ALL_LAYERS = [...CAR_LAYERS.map(l => ({ ...l, subject: 'car' })), ...LAYERS.map(l => ({ ...l, subject: 'engine' }))];
+  for (const L of ALL_LAYERS) {
+    const lab = el('label', { 'data-for': L.subject }, layerWrap);
     const inp = el('input', { type: 'checkbox', id: 'layer-' + L.id }, lab);
     inp.checked = true;
     el('span', { text: L.name }, lab);
@@ -55,7 +56,7 @@ export function createUI(app, state) {
     layerInputs[L.id] = inp;
   }
   $('layers-all').addEventListener('click', () => app.showAllLayers());
-  function syncLayers() { for (const L of LAYERS) layerInputs[L.id].checked = state.layers[L.id] !== false; }
+  function syncLayers() { for (const L of ALL_LAYERS) layerInputs[L.id].checked = state.layers[L.id] !== false; }
 
   // ----------------------------------------------------------------- tach
   const tach = $('tach');
@@ -138,7 +139,14 @@ export function createUI(app, state) {
   for (const [k, v] of specs) { el('dt', { text: k }, $('specs')); el('dd', { text: v }, $('specs')); }
 
   // ------------------------------------------------------------- controls
-  const modeSeg = $('modeSeg'), slowSeg = $('slowSeg'), secSeg = $('secSeg');
+  const modeSeg = $('modeSeg'), slowSeg = $('slowSeg'), secSeg = $('secSeg'), subjectSeg = $('subjectSeg'), gearSeg = $('gearSeg');
+  subjectSeg.addEventListener('click', e => { const b = e.target.closest('button'); if (b) app.setSubject(b.dataset.subjectBtn); });
+  gearSeg.addEventListener('click', e => { const b = e.target.closest('button'); if (b) app.setGear(+b.dataset.gear); });
+  $('chip-bonnet').addEventListener('click', () => app.toggle('bonnetOpen'));
+  $('chip-doors').addEventListener('click', () => app.toggle('doorsOpen'));
+  $('chip-lights').addEventListener('click', () => app.toggle('lights'));
+  const steer = $('steer');
+  steer.addEventListener('input', () => { app.setSteer(+steer.value); });
   modeSeg.addEventListener('click', e => { const b = e.target.closest('button'); if (b) app.setMode(b.dataset.mode); });
   slowSeg.addEventListener('click', e => { const b = e.target.closest('button'); if (b) app.setSlow(parseFloat(b.dataset.slow)); });
   secSeg.addEventListener('click', e => { const b = e.target.closest('button'); if (b) app.setSection(b.dataset.sec, null); });
@@ -179,7 +187,7 @@ export function createUI(app, state) {
   function updateCallouts(project) {
     const on = state.callouts && !state.clean;
     for (const c of cos) {
-      let vis = on;
+      let vis = on && c.a.subject === state.subject && (!c.a.inner || state.mode === 'xray' || state.explode > 0.35);
       if (vis) { for (let o = c.a.obj; o; o = o.parent) if (!o.visible) { vis = false; break; } }
       if (vis) { project(c.a.obj, c.p, c.a.normal); vis = c.p.visible; }
       // keep labels clear of the open part card
@@ -216,6 +224,18 @@ export function createUI(app, state) {
   // ---------------------------------------------------------------- sync
   function sync() {
     root.dataset.mode = state.mode;
+    root.dataset.subject = state.subject;
+    const isCar = state.subject === 'car';
+    pressed(subjectSeg, b => b.dataset.subjectBtn === state.subject);
+    pressed(gearSeg, b => +b.dataset.gear === state.gear);
+    $('chip-bonnet').setAttribute('aria-pressed', String(state.bonnetOpen));
+    $('chip-doors').setAttribute('aria-pressed', String(state.doorsOpen));
+    $('chip-lights').setAttribute('aria-pressed', String(state.lights));
+    steer.value = state.steer; fill(steer);
+    $('steer-val').textContent = (state.steer > 0 ? 'R ' : state.steer < 0 ? 'L ' : '') + Math.abs(state.steer) + '°';
+    $('plate-sub').textContent = isCar ? 'GT · 6.0 L V12 · front-mid engine' : '6.0 L · 60° V12 · 48-valve DOHC';
+    $('view-six').textContent = isCar ? 'Engine bay' : 'Intake';
+    $('explode-label').textContent = isCar ? 'Lift the body' : 'Exploded view';
     root.classList.toggle('clean', state.clean);
     pressed(modeSeg, b => b.dataset.mode === state.mode);
     pressed(slowSeg, b => Math.abs(parseFloat(b.dataset.slow) - state.slow) < 1e-6);
@@ -279,6 +299,7 @@ export function createUI(app, state) {
     $('st-piston').textContent = (2 * E.stroke / 1000 * rpm / 60).toFixed(1) + ' m/s';
     $('st-fire').textContent = (rpm / 10).toFixed(0) + ' Hz';
     $('st-heat').textContent = fmt(20 + 880 * Math.pow(state.heat, 0.7)) + ' °C';
+    $('st-speed').textContent = state.gear ? fmt(state.speed) + ' km/h' : 'Neutral';
     if (state.running || state.rpm > 0) {
       crank.value = Math.round(deg); fill(crank);
     }

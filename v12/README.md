@@ -1,8 +1,9 @@
 # Tipo 600 V12
 
-A real-time, interactive 3D showcase of a 6.0-litre 60° V12, built entirely in
-three.js. Every surface is generated in code from the dimensions in
-`js/config.js`: there are no imported models or image textures.
+A real-time, interactive 3D showcase of a 6.0-litre 60° V12 and the grand
+tourer built around it, made entirely in three.js. Every surface is generated
+in code from the dimensions in `js/config.js` and `js/car-body.js`: there are
+no imported models or image textures.
 
 ## Run it
 
@@ -16,6 +17,32 @@ python3 -m http.server 4173
 Add `#lite` to the address for a reduced-effects renderer on slow machines.
 
 ## What it does
+
+The **Car / Engine** switch at the top chooses the subject. Both share the
+same studio, view modes and telemetry, and the engine you see in the car is
+the same running model.
+
+### The car
+
+- A two-seat fastback, 4,650 mm long on a 2,720 mm wheelbase, with the V12
+  mounted behind the front axle and a transaxle at the rear.
+- **Body** – one lofted surface: paint, glass, bonnet, doors, lamps and vents
+  are regions of the same grid, so panels meet exactly. Wheel arches are cut
+  into it, and the cabin is lined behind every panel.
+- **Detail** – ten-spoke centre-lock wheels with treaded, lettered tyres,
+  drilled carbon-ceramic discs and six-piston calipers; double wishbones with
+  coil-over dampers; a carbon tub with roof hoop; torque tube, transaxle and
+  half shafts; a twin exhaust from manifold to tailpipe; radiator pack; seats,
+  harnesses, dashboard, displays and a steering wheel that turns.
+- **Configure** – paint, roof, wheel finish, caliper colour and leather, plus
+  the engine's own finishes.
+- **Open it up** – raise the bonnet, swing the doors, switch the lamps, steer
+  the front wheels, and pick a gear to turn the rear wheels at road speed.
+- **X-ray** ghosts the bodywork to show the rolling chassis; **Section** cuts
+  the whole car (and the engine in it) lengthwise or across; **Lift the body**
+  raises the shell clear of the chassis.
+
+### The engine
 
 - **Studio** – PBR materials under a softbox environment, soft shadows, a
   mirrored turntable and bloom. Finishes for the cam covers, castings, intake
@@ -35,8 +62,9 @@ Add `#lite` to the address for a reduced-effects renderer on slow machines.
   does; focus the camera on it or isolate its layer.
 - **Sound** – an optional synthesised exhaust note locked to firing frequency.
 
-Keys: `Space` start/stop, `1` `2` `3` view modes, `E` explode, `H` hide panels,
-`Esc` clear the selection.
+Keys: `Space` start/stop, `C` car/engine, `1` `2` `3` view modes, `E` explode or
+lift the body, `B` bonnet, `D` doors, `L` lamps, `H` hide panels, `Esc` clear
+the selection.
 
 ## How the engine is modelled
 
@@ -63,7 +91,9 @@ v12/
   js/geo.js             extrusion / lathe / merge helpers
   js/textures.js        procedural surface textures
   js/materials.js       material library and configurator finishes
-  js/engine.js          the model and its kinematics
+  js/engine.js          the engine model and its kinematics
+  js/car-body.js        the lofted bodywork: sections, panels, arches, lamps
+  js/car.js             wheels, brakes, chassis, drivetrain, cabin, assembly
   js/stage.js           renderer, lighting, post, camera, x-ray and section
   js/ui.js              controls and telemetry
   js/audio.js           engine note synthesis

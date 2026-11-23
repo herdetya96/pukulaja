@@ -67,6 +67,42 @@ export function createMaterials() {
     badge: std({ color: '#ffffff', metalness: 0.4, roughness: 0.4, map: T.tex(T.badge(), { srgb: true }) }),
   };
 
+  // ---- car ----
+  const hexMap = T.tex(T.hexMesh(), { srgb: true, repeat: [1.1, 1.27] });
+  const phys = o => new THREE.MeshPhysicalMaterial(o);
+  Object.assign(M, {
+    paint: phys({ color: '#7d0a0c', metalness: 0.35, roughness: 0.46, clearcoat: 1, clearcoatRoughness: 0.035 }),
+    roof: phys({ color: '#7d0a0c', metalness: 0.35, roughness: 0.46, clearcoat: 1, clearcoatRoughness: 0.035 }),
+    carGlass: phys({ color: '#05080b', metalness: 0, roughness: 0.02, transparent: true, opacity: 0.66, depthWrite: false, envMapIntensity: 1.6 }),
+    gloss: std({ color: '#050506', metalness: 0.2, roughness: 0.1 }),
+    carUnder: std({ color: '#0a0a0b', metalness: 0, roughness: 0.88 }),
+    archLiner: std({ color: '#0a0a0b', metalness: 0, roughness: 0.92, side: THREE.DoubleSide }),
+    carSill: std({ color: '#0d0e10', metalness: 0.35, roughness: 0.42 }),
+    vent: std({ color: '#ffffff', metalness: 0.5, roughness: 0.55, map: hexMap }),
+    grille: std({ color: '#ffffff', metalness: 0.5, roughness: 0.5, map: hexMap }),
+    lens: std({ color: '#0b0d12', metalness: 0.5, roughness: 0.04 }),
+    tail: std({ color: '#3a0306', metalness: 0.3, roughness: 0.08, emissive: '#ff1408', emissiveIntensity: 0.25 }),
+    drl: std({ color: '#ffffff', emissive: '#e4ecff', emissiveIntensity: 2.8, side: THREE.DoubleSide }),
+    tailLit: std({ color: '#ff2a1a', emissive: '#ff1a0a', emissiveIntensity: 2.6, side: THREE.DoubleSide }),
+    gap: std({ color: '#020202', metalness: 0, roughness: 1 }),
+    chrome: std({ color: '#eceef2', metalness: 1, roughness: 0.05 }),
+    mirror: std({ color: '#dfe6ee', metalness: 1, roughness: 0.02 }),
+    liner: std({ color: '#151517', metalness: 0, roughness: 0.96 }),
+    tyre: std({ color: '#0d0d0e', metalness: 0, roughness: 0.9, bumpMap: T.tex(T.tread(), { repeat: [56, 1] }), bumpScale: 5 }),
+    harness: std({ color: '#9a1410', metalness: 0, roughness: 0.8 }),
+    tyreText: std({ color: '#ffffff', metalness: 0, roughness: 0.8, map: T.tex(T.tyreRing(), { srgb: true }), alphaTest: 0.35 }),
+    rim: std({ color: '#b9bcc2', metalness: 1, roughness: 0.2 }),
+    disc: std({ color: '#3a3c40', metalness: 0.55, roughness: 0.55 }),
+    caliper: phys({ color: '#b3120e', metalness: 0.2, roughness: 0.3, clearcoat: 0.8, clearcoatRoughness: 0.1 }),
+    damper: std({ color: '#c9a227', metalness: 1, roughness: 0.3 }),
+    coilSpring: std({ color: '#b3120e', metalness: 0.4, roughness: 0.4 }),
+    radiator: std({ color: '#ffffff', metalness: 0.8, roughness: 0.5, map: T.tex(T.fins(), { srgb: true, repeat: [1, 60] }) }),
+    leather: std({ color: '#8a4b25', metalness: 0, roughness: 0.52 }),
+    alcantara: std({ color: '#17181a', metalness: 0, roughness: 0.97 }),
+    carpet: std({ color: '#0e0e10', metalness: 0, roughness: 1 }),
+    screen: new THREE.MeshBasicMaterial({ map: T.tex(T.cluster(), { srgb: true }) }),
+  });
+
   // cut faces in section mode
   M.cap = std({ color: '#ffffff', metalness: 0.1, roughness: 0.8, map: hatchMap });
 
@@ -124,6 +160,19 @@ export function applyFinish(M, group, id) {
     M.castHead.color.copy(col).offsetHSL(0, 0, 0.025); M.castHead.roughness = opt.rough - 0.03;
   } else if (group === 'intake') {
     if (!opt.airbox) { M.stack.color.copy(col); M.stack.roughness = opt.rough; }
+  } else if (group === 'paint') {
+    M.paint.color.copy(col); M.paint.metalness = opt.metal ?? 0.35; M.paint.roughness = opt.rough ?? 0.46;
+    if (!M.roof.userData.contrast) { M.roof.color.copy(col); M.roof.metalness = M.paint.metalness; M.roof.roughness = M.paint.roughness; }
+  } else if (group === 'roof') {
+    M.roof.userData.contrast = !!opt.contrast;
+    if (opt.contrast) { M.roof.color.copy(col); M.roof.metalness = 0.2; M.roof.roughness = 0.12; }
+    else { M.roof.color.copy(M.paint.color); M.roof.metalness = M.paint.metalness; M.roof.roughness = M.paint.roughness; }
+  } else if (group === 'wheels') {
+    M.rim.color.copy(col); M.rim.roughness = opt.rough; M.rim.metalness = opt.metal ?? 1;
+  } else if (group === 'calipers') {
+    M.caliper.color.copy(col);
+  } else if (group === 'interior') {
+    M.leather.color.copy(col);
   } else if (group === 'exhaust') {
     M.exhaust.color.set(opt.tint ? '#ffffff' : opt.color);
     M.exhaust.map = opt.tint ? M._tex.heatMap : null;

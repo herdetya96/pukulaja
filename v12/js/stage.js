@@ -9,22 +9,42 @@ const SHELL_PARTS = ['block', 'liners', 'sump', 'heads', 'gasket', 'covers', 'co
 const SOLID_PARTS = ['block', 'liners', 'sump', 'heads', 'gasket'];
 const S30 = 0.5, C30 = Math.cos(Math.PI / 6);
 
+const CAR_GHOST = ['body', 'bonnet', 'doors', 'glass', 'lights', 'lining', 'aero'];
+const CAR_SOLID = ['tub', 'drivetrain'];
+const FRAMES = { engine: { radius: 4.9, baseY: 0.6 }, car: { radius: 6.3, baseY: -1.5 } };
+
 export const VIEWS = {
-  hero: { az: 38, pol: 68, r: 1.0, ty: 0 },
-  front: { az: 0.01, pol: 80, r: 0.92, ty: 0 },
-  side: { az: 90, pol: 82, r: 1.0, ty: 0 },
-  top: { az: 20, pol: 14, r: 1.02, ty: 0 },
-  rear: { az: -122, pol: 70, r: 1.0, ty: 0 },
-  valley: { az: 72, pol: 40, r: 0.72, ty: 0.9 },
+  engine: {
+    hero: { az: 38, pol: 68, r: 1.0, ty: 0 },
+    front: { az: 0.01, pol: 80, r: 0.92, ty: 0 },
+    side: { az: 90, pol: 82, r: 1.0, ty: 0 },
+    top: { az: 20, pol: 14, r: 1.02, ty: 0 },
+    rear: { az: -122, pol: 70, r: 1.0, ty: 0 },
+    valley: { az: 72, pol: 40, r: 0.72, ty: 0.9 },
+  },
+  car: {
+    hero: { az: 37, pol: 78, r: 0.88, ty: 0 },
+    front: { az: 0.01, pol: 84, r: 0.72, ty: -0.1 },
+    side: { az: 90, pol: 85, r: 0.9, ty: 0 },
+    top: { az: 0.01, pol: 5, r: 0.92, ty: 0 },
+    rear: { az: -148, pol: 77, r: 0.88, ty: 0 },
+    valley: { az: 32, pol: 50, r: 0.5, ty: 0.3, tx: 2.6 },
+  },
 };
 
 export const SECTIONS = {
-  cross: { normal: [-1, 0, 0], range: [-3.4, 3.4], start: 1.56, view: { az: 30, pol: 78, r: 0.9, ty: 0 } },
-  long: { normal: [0, 0, -1], range: [-2.6, 2.6], start: 0, view: { az: 82, pol: 78, r: 1.0, ty: 0 } },
-  bank: { normal: [0, S30, -C30], range: [-0.75, 0.75], start: 0, view: { az: 74, pol: 84, r: 0.95, ty: 0.3 } },
+  engine: {
+    cross: { normal: [-1, 0, 0], range: [-3.4, 3.4], start: 1.56, view: { az: 30, pol: 78, r: 0.9, ty: 0 } },
+    long: { normal: [0, 0, -1], range: [-2.6, 2.6], start: 0, view: { az: 82, pol: 78, r: 1.0, ty: 0 } },
+    bank: { normal: [0, S30, -C30], range: [-0.75, 0.75], start: 0, view: { az: 74, pol: 84, r: 0.95, ty: 0.3 } },
+  },
+  car: {
+    long: { normal: [0, 0, -1], range: [-2.7, 2.7], start: 0, view: { az: 84, pol: 82, r: 0.86, ty: 0 } },
+    cross: { normal: [-1, 0, 0], range: [-6, 6.2], start: 2.55, view: { az: 26, pol: 78, r: 0.8, ty: 0 } },
+  },
 };
 
-export function createStage(container, M, engine, { lite = false } = {}) {
+export function createStage(container, M, engine, car, { lite = false } = {}) {
   const mobile = lite || matchMedia('(max-width: 820px), (pointer: coarse)').matches;
   const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', alpha: false });
   let pixelRatio = lite ? 1 : Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2);
@@ -142,6 +162,11 @@ export function createStage(container, M, engine, { lite = false } = {}) {
   setMirror(!lite);
 
   scene.add(engine.root);
+  car.root.position.y = FLOOR_Y;
+  car.root.visible = false;
+  scene.add(car.root);
+  let subject = 'engine';
+  const all = { ...engine.parts, ...car.parts };
 
   // -------------------------------------------------------- post-processing
   const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: lite ? 0 : mobile ? 2 : 4, stencilBuffer: true });
@@ -164,7 +189,7 @@ export function createStage(container, M, engine, { lite = false } = {}) {
   });
   controls.target.set(0, 0.75, 0);
 
-  const frame = { radius: 4.9, baseY: 0.6 };          // what the camera has to fit
+  const frame = { ...FRAMES.engine };          // what the camera has to fit
   const inset = { l: 0, t: 0, r: 0, b: 0 };            // screen area covered by panels
   const fitDist = r => {
     const t = Math.tan(camera.fov * Math.PI / 360);
@@ -188,7 +213,7 @@ export function createStage(container, M, engine, { lite = false } = {}) {
   const viewPose = v => {
     const d = fitDist(frame.radius) * v.r;
     const az = v.az * Math.PI / 180, pol = v.pol * Math.PI / 180;
-    const t = new THREE.Vector3(0, frame.baseY + v.ty, 0);
+    const t = new THREE.Vector3(v.tx || 0, frame.baseY + v.ty, 0);
     return { target: t, pos: new THREE.Vector3(Math.sin(pol) * Math.cos(az), Math.cos(pol), Math.sin(pol) * Math.sin(az)).multiplyScalar(d).add(t) };
   };
   let fly = null;
@@ -200,9 +225,9 @@ export function createStage(container, M, engine, { lite = false } = {}) {
     while (dTheta < -Math.PI) dTheta += Math.PI * 2;
     fly = { t: 0, dur, fromT, toT: pose.target.clone(), a, b, dTheta };
   }
-  function setView(name, dur) { flyTo(viewPose(VIEWS[name] || name), dur); }
+  function setView(name, dur) { flyTo(viewPose(VIEWS[subject][name] || name), dur); }
   function finishFly() { if (fly) fly.t = 0.9999; }
-  function snapView(name) { const p = viewPose(VIEWS[name] || name); camera.position.copy(p.pos); controls.target.copy(p.target); controls.update(); }
+  function snapView(name) { const p = viewPose(VIEWS[subject][name] || name); camera.position.copy(p.pos); controls.target.copy(p.target); controls.update(); }
 
   // keep the framing when the engine grows or shrinks (explode slider)
   function setFrame(radius, baseY) {
@@ -220,6 +245,20 @@ export function createStage(container, M, engine, { lite = false } = {}) {
   for (const id of SHELL_PARTS) for (const o of engine.parts[id] || []) o.traverse(m => {
     if (m.isMesh && !m.userData.helper) { m.userData.solid = m.material; m.userData.shell = id; shellMeshes.push(m); }
   });
+  // every mesh of the car; the outer skin can be ghosted, everything can be cut
+  const carMeshes = [];
+  {
+    const seen = new Set();
+    for (const [id, list] of Object.entries(car.parts)) {
+      if (id === 'v12') continue;
+      for (const o of list) o.traverse(m => {
+        if (!m.isMesh || m.userData.helper || seen.has(m)) return;
+        seen.add(m);
+        Object.assign(m.userData, { solid: m.material, carMesh: id, ghosts: CAR_GHOST.includes(id), cast: m.castShadow, ro: m.renderOrder });
+        carMeshes.push(m);
+      });
+    }
+  }
   const clipped = new Map();
   const clipOf = mat => {
     let c = clipped.get(mat);
@@ -237,8 +276,8 @@ export function createStage(container, M, engine, { lite = false } = {}) {
   const stBack = new THREE.MeshBasicMaterial({ ...stencilBase, side: THREE.BackSide, stencilFail: THREE.IncrementWrapStencilOp, stencilZFail: THREE.IncrementWrapStencilOp, stencilZPass: THREE.IncrementWrapStencilOp });
   const stFront = new THREE.MeshBasicMaterial({ ...stencilBase, side: THREE.FrontSide, stencilFail: THREE.DecrementWrapStencilOp, stencilZFail: THREE.DecrementWrapStencilOp, stencilZPass: THREE.DecrementWrapStencilOp });
   const stencilMeshes = [];
-  for (const m of shellMeshes) {
-    if (!SOLID_PARTS.includes(m.userData.shell)) continue;
+  for (const m of [...shellMeshes, ...carMeshes]) {
+    if (!SOLID_PARTS.includes(m.userData.shell) && !CAR_SOLID.includes(m.userData.carMesh)) continue;
     for (const mat of [stBack, stFront]) {
       const h = new THREE.Mesh(m.geometry, mat);
       h.userData.helper = true; h.renderOrder = 1; h.visible = false; h.raycast = () => {}; h.frustumCulled = false;
@@ -261,16 +300,21 @@ export function createStage(container, M, engine, { lite = false } = {}) {
   const hidden = new Set();          // part ids switched off
   function applyMaterials() {
     for (const m of shellMeshes) {
-      if (mode === 'xray') { m.material = M.ghost; m.castShadow = false; m.renderOrder = 4; }
+      if (mode === 'xray' && subject === 'engine') { m.material = M.ghost; m.castShadow = false; m.renderOrder = 4; }
       else if (mode === 'section') { m.material = clipOf(m.userData.solid); m.castShadow = true; m.renderOrder = 2; }
       else { m.material = m.userData.solid; m.castShadow = true; m.renderOrder = 0; }
+    }
+    for (const m of carMeshes) {
+      if (mode === 'xray' && m.userData.ghosts) { m.material = M.ghost; m.castShadow = false; m.renderOrder = 4; }
+      else if (mode === 'section') { m.material = clipOf(m.userData.solid); m.castShadow = m.userData.cast; m.renderOrder = 2; }
+      else { m.material = m.userData.solid; m.castShadow = m.userData.cast; m.renderOrder = m.userData.ro; }
     }
     if (mode === 'section') syncClipped();
     for (const h of stencilMeshes) h.visible = mode === 'section';
     cap.visible = mode === 'section';
   }
   function refreshVisible() {
-    for (const [id, list] of Object.entries(engine.parts)) {
+    for (const [id, list] of Object.entries(all)) {
       if (id === 'stand') continue;
       for (const o of list) o.visible = !hidden.has(id) && !o.userData.cutHidden;
     }
@@ -283,8 +327,20 @@ export function createStage(container, M, engine, { lite = false } = {}) {
     syncGas(); refreshVisible();
   }
   function setExploded(on) { if (on !== exploded) { exploded = on; syncGas(); } }
+  // Swap between the bare engine on its stand and the engine installed in the car.
+  function setSubject(next) {
+    subject = next;
+    if (next === 'car') { car.engineMount.add(engine.root); engine.root.scale.setScalar(1); }
+    else { scene.add(engine.root); engine.root.scale.setScalar(0.01); }
+    car.root.visible = next === 'car';
+    engine.root.visible = true;
+    Object.assign(frame, FRAMES[next]);
+    controls.minDistance = next === 'car' ? 3.2 : 5;
+    setMode(mode);
+  }
+  function setEngineShown(on) { engine.root.visible = on; }
   function setSection(name, value) {
-    const s = SECTIONS[name];
+    const s = SECTIONS[subject][name];
     clipPlane.normal.set(...s.normal).normalize();
     clipPlane.constant = value;
     placeCap();
@@ -296,7 +352,7 @@ export function createStage(container, M, engine, { lite = false } = {}) {
   }
   function setPartVisible(id, on) {
     if (on) hidden.delete(id); else hidden.add(id);
-    for (const o of engine.parts[id] || []) o.visible = on && !o.userData.cutHidden;
+    for (const o of all[id] || []) o.visible = on && !o.userData.cutHidden;
   }
 
   // ---------------------------------------------------- picking / highlight
@@ -306,16 +362,17 @@ export function createStage(container, M, engine, { lite = false } = {}) {
     const r = renderer.domElement.getBoundingClientRect();
     ndc.set((clientX - r.left) / r.width * 2 - 1, -(clientY - r.top) / r.height * 2 + 1);
     ray.setFromCamera(ndc, camera);
-    const hits = ray.intersectObject(engine.root, true);
+    const hits = ray.intersectObject(subject === 'car' ? car.root : engine.root, true);
     let fallback = null;
     for (const h of hits) {
       const o = h.object;
       if (o.userData.helper || !o.userData.part) continue;
       let vis = true; for (let p = o; p; p = p.parent) if (!p.visible) { vis = false; break; }
       if (!vis) continue;
-      const shell = !!o.userData.shell;
-      if (mode === 'section' && shell && clipPlane.distanceToPoint(h.point) < 0) continue;
-      if (mode === 'xray' && shell) { fallback ??= o.userData.part; continue; }
+      const cut = !!o.userData.shell || !!o.userData.carMesh;
+      const ghost = subject === 'car' ? !!o.userData.ghosts : !!o.userData.shell;
+      if (mode === 'section' && cut && clipPlane.distanceToPoint(h.point) < 0) continue;
+      if (mode === 'xray' && ghost) { fallback ??= o.userData.part; continue; }
       return o.userData.part;
     }
     return fallback;
@@ -325,7 +382,7 @@ export function createStage(container, M, engine, { lite = false } = {}) {
     for (const g of glow) g.parent?.remove(g);
     glow = [];
     if (!id) return;
-    for (const o of engine.parts[id] || []) o.traverse(m => {
+    for (const o of all[id] || []) o.traverse(m => {
       if (!m.isMesh || m.userData.helper || m.isInstancedMesh) return;
       const g = new THREE.Mesh(m.geometry, M.highlight);
       g.userData.helper = true; g.raycast = () => {}; g.renderOrder = 6;
@@ -335,7 +392,7 @@ export function createStage(container, M, engine, { lite = false } = {}) {
   const _b = new THREE.Box3(), _sp = new THREE.Sphere();
   function focusPart(id) {
     _b.makeEmpty();
-    for (const o of engine.parts[id] || []) _b.expandByObject(o);
+    for (const o of all[id] || []) _b.expandByObject(o);
     if (_b.isEmpty()) return;
     _b.getBoundingSphere(_sp);
     const dir = camera.position.clone().sub(controls.target).normalize();
@@ -407,7 +464,7 @@ export function createStage(container, M, engine, { lite = false } = {}) {
     pulse += dt;
     M.highlight.opacity = 0.2 + 0.14 * Math.sin(pulse * 4.2);
     const fade = engine.parts.stand[0].userData.fade;
-    for (const o of engine.parts.stand) o.visible = !fade && !hidden.has('stand');
+    for (const o of engine.parts.stand) o.visible = !fade && !hidden.has('stand') && subject === 'engine';
     composer.render(dt);
     if (measure) adapt(dt);
   }
@@ -417,9 +474,10 @@ export function createStage(container, M, engine, { lite = false } = {}) {
   return {
     renderer, scene, camera, controls, size, mobile,
     render, setView, snapView, setFrame, setInsets, setExploded, finishFly, flyTo, viewPose,
-    setMode, setSection, setExhaustGlow, setPartVisible, syncClipped,
+    setMode, setSection, setSubject, setEngineShown, setExhaustGlow, setPartVisible, syncClipped,
     pick, highlight, focusPart, project,
     get mode() { return mode; },
+    get subject() { return subject; },
     get perfLevel() { return perf.level; },
   };
 }
