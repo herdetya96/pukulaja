@@ -242,7 +242,7 @@ export function createUI(app, state) {
     pressed(secSeg, b => b.dataset.sec === state.section);
     $('tool-callouts').setAttribute('aria-pressed', String(state.callouts));
     $('tool-spin').setAttribute('aria-pressed', String(state.spin));
-    $('tool-sound').setAttribute('aria-pressed', String(state.sound));
+    $('tool-sound').setAttribute('aria-pressed', String(!!state.sound));
     $('tool-clean').setAttribute('aria-pressed', String(state.clean));
     $('ign').setAttribute('aria-pressed', String(state.running));
     $('ign-label').textContent = state.running ? 'STOP' : 'START';
@@ -306,5 +306,12 @@ export function createUI(app, state) {
     $('crank-val').textContent = deg.toFixed(0) + '°';
   }
 
-  return { sync, update, updateCallouts, showPart, showTip, setTab };
+  const toastEl = $('toast');
+  let toastT = 0;
+  function toast(text) {
+    toastEl.textContent = text; toastEl.hidden = false;
+    clearTimeout(toastT); toastT = setTimeout(() => { toastEl.hidden = true; }, 2200);
+  }
+
+  return { sync, update, updateCallouts, showPart, showTip, setTab, toast };
 }

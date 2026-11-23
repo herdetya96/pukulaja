@@ -114,7 +114,8 @@ export const FINISHES = {
   paint: {
     label: 'Paint', subject: 'car',
     options: [
-      { id: 'rosso', name: 'Rosso profondo', color: '#7d0a0c', metal: 0.3 },
+      { id: 'rosso', name: 'Rosso corsa', color: '#a80d16', metal: 0.2 },
+      { id: 'scuro', name: 'Rosso scuro', color: '#5e0709', metal: 0.4 },
       { id: 'blu', name: 'Blu notte', color: '#0b1c46', metal: 0.45 },
       { id: 'verde', name: 'Verde scuro', color: '#0a2c20', metal: 0.4 },
       { id: 'grigio', name: 'Grigio titanio', color: '#3f4247', metal: 0.6 },
@@ -230,8 +231,8 @@ export const PARTS = {
   lights: {
     name: 'Lighting', layer: 'body',
     material: 'Matrix LED',
-    specs: [['Front', 'Twin light blades'], ['Rear', 'Full-width bar']],
-    text: 'Slim LED blades follow the fender line at the front; a single light bar wraps the tail.',
+    specs: [['Front', 'Three projectors per side'], ['Rear', 'Four round lamps']],
+    text: 'Long clear-covered headlamps sweep back along the wings, each with three projector units and an L-shaped running light. Four round lamps sit in the tail.',
   },
   aero: {
     name: 'Aero', layer: 'body',
@@ -253,9 +254,9 @@ export const PARTS = {
   },
   wheels: {
     name: 'Wheels & tyres', layer: 'wheels',
-    material: 'Forged aluminium, centre-lock',
-    specs: [['Front', '275/35 ZR20'], ['Rear', '315/30 ZR21'], ['Spokes', '10, dished']],
-    text: 'Ten-spoke forged wheels held by a single centre nut. The rears are wider and an inch larger to put the power down.',
+    material: 'Forged aluminium',
+    specs: [['Front', '275/35 ZR20'], ['Rear', '315/30 ZR21'], ['Design', 'Five twin spokes, dished']],
+    text: 'Forged wheels with five pairs of spokes that splay from the hub, on five studs. The rears are wider and an inch larger to put the power down.',
   },
   brakes: {
     name: 'Brakes', layer: 'wheels',

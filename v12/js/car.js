@@ -54,15 +54,17 @@ function buildWheel(M, a, front, calAngle) {
   const lip = rr + 12;
   P.add(lathe([[lip, hw - 5], [rr + 3, hw - 11], [rr - 7, hw - 30], [rr - 22, hw - 72], [rr - 22, -hw + 52], [rr - 5, -hw + 22], [lip, -hw + 5]], 56, 40), 'rim', TO_Z);
   P.add(lathe([[lip, -hw + 5], [lip + 3, -hw + 9], [lip + 3, hw - 9], [lip, hw - 5]], 56, 40), 'rim', TO_Z);
-  const n = 10, hubR = 66, tipR = rr - 5, pts = [];
-  for (let k = 0; k < n; k++) {
-    const c = k / n * Math.PI * 2;
+  // five pairs of spokes that start close together at the hub and splay out
+  const hubR = 80, tipR = rr - 5, pts = [];
+  for (let k = 0; k < 5; k++) for (const pair of [-1, 1]) {
+    const c = k / 5 * Math.PI * 2;
     const edge = (sgn, dir) => {
       const out = [];
       for (let m = 0; m <= 4; m++) {
         const t = (dir > 0 ? m : 4 - m) / 4, r = hubR + (tipR - hubR) * t;
-        const half = (9.5 * (1 - t) ** 1.6 + 2.5 * t + 1.2 * Math.sin(Math.PI * t)) * DEG;
-        out.push([r * Math.cos(c + sgn * half), r * Math.sin(c + sgn * half)]);
+        const mid = c + pair * (6.2 + 9.6 * t) * DEG;
+        const half = (4.4 * (1 - t) ** 1.4 + 2.3 * t + 0.9 * Math.sin(Math.PI * t)) * DEG;
+        out.push([r * Math.cos(mid + sgn * half), r * Math.sin(mid + sgn * half)]);
       }
       return out;
     };
@@ -71,14 +73,19 @@ function buildWheel(M, a, front, calAngle) {
   const spokes = extrudeZ(shapeFrom(pts), 0, 24, 3.5);
   const sp = spokes.attributes.position;
   for (let i = 0; i < sp.count; i++) {
-    const r = Math.hypot(sp.getX(i), sp.getY(i)), t = THREE.MathUtils.clamp((r - hubR) / (tipR - hubR), 0, 1);
+    const r = Math.hypot(sp.getX(i), sp.getY(i)), t = THREE.MathUtils.clamp((r - 66) / (tipR - 66), 0, 1);
     sp.setZ(i, sp.getZ(i) * (1 - 0.3 * t) - 52 * Math.pow(1 - t, 1.5));
   }
   spokes.computeVertexNormals();
   P.add(toCreasedNormals(spokes, 42 * DEG), 'rim', T(0, 0, hw - 40));
-  P.add(cylZ(hubR + 6, 34, 40), 'rim', T(0, 0, hw - 84));
-  P.add(cylZ(31, 20, 6), 'steel', T(0, 0, hw - 62));
-  P.add(cylZ(20, 8, 24), 'gloss', T(0, 0, hw - 50));
+  P.add(cylZ(hubR + 8, 34, 40), 'rim', T(0, 0, hw - 84));
+  for (let k = 0; k < 5; k++) {
+    const an = (k + 0.5) / 5 * Math.PI * 2;
+    P.add(cylZ(10.5, 20, 6), 'steel', T(54 * Math.cos(an), 54 * Math.sin(an), hw - 60));
+  }
+  P.add(cylZ(33, 10, 32), 'chrome', T(0, 0, hw - 64));
+  P.add(cylZ(28, 11, 32), 'capBadge', T(0, 0, hw - 63));
+  P.add(cylY(4, 26, 8), 'gap', mat4({ p: [0, rr - 16, hw - 46], r: [0.9, 0, 0] }));
   const wg = P.build(); spin.add(wg);
 
   // carbon-ceramic disc, drilled
@@ -131,6 +138,18 @@ export function buildCar(M) {
   for (const d of doors) { shell.add(d); reg('doors', d); }
   ex(G.doorR, [0, -240, 620], 0.9); ex(G.doorL, [0, -240, -620], 0.9);
 
+  // door cards: armrest, pull, speaker
+  for (const [door, s] of [[G.doorR, 1], [G.doorL, -1]]) {
+    const D = new Part('doors', M), zi = s * (wMax(0) - 96);
+    D.add(rb(560, 60, 74, 22), 'leather', T(-20, 640, zi));
+    D.add(rb(300, 150, 20, 8), 'quilt', T(-40, 760, zi + s * 26));
+    D.add(rb(150, 16, 22, 6), 'chrome', T(120, 690, zi - s * 30));
+    D.add(cylZ(74, 10, 32), 'gloss', T(380, 440, zi + s * 30));
+    D.add(cylZ(66, 12, 32), 'vent', T(380, 440, zi + s * 28));
+    D.add(rb(700, 12, 16, 4), 'carbon', T(-30, 820, zi + s * 30));
+    const dg = D.build({ cast: false }); dg.position.copy(door.position).negate(); door.add(dg);
+  }
+
   // trim that sits on the skin
   {
     const P = new Part('body', M);
@@ -171,8 +190,32 @@ export function buildCar(M) {
     P.add(cylY(34, 5, 32), 'chrome', alignY([0.4, 1, 0], [nb.p.x, nb.p.y + 1, 0]));
     P.add(cylY(27, 6, 32), 'caliper', alignY([0.4, 1, 0], [nb.p.x, nb.p.y + 1.6, 0]));
     const plate = new THREE.PlaneGeometry(330, 84); plate.rotateY(-Math.PI / 2);
-    P.add(plate, 'badge', T(CAR.rear - 3, 600, 0));
+    P.add(plate, 'badge', T(CAR.rear - 3, body.plateY, 0));
     const g = P.build(); shell.add(g); reg('body', g);
+
+    const L = new Part('lights', M);
+    const toX = new THREE.Matrix4().makeRotationY(Math.PI / 2);
+    for (const s of [1, -1]) {
+      // twin round tail lamps each side, set into the tail
+      for (const [z, r] of [[628, 66], [462, 55]]) {
+        const slope = -(bowAt(CAR.rear, z + 1) - bowAt(CAR.rear, z - 1)) / 2;
+        const m = mat4({ p: [CAR.rear - bowAt(CAR.rear, z) - 4, 748, s * z], r: [0, s * Math.atan(slope), 0] });
+        const add = (geo, mat, dx = 0) => L.add(geo, mat, m.clone().multiply(T(dx, 0, 0)).multiply(toX));
+        add(new THREE.TorusGeometry(r, 5.5, 10, 40), 'chrome');
+        add(new THREE.TorusGeometry(r * 0.7, 7.5, 10, 40), 'tailLit', -5);
+        const dome = new THREE.SphereGeometry(r * 0.96, 28, 10, 0, Math.PI * 2, 0, Math.PI / 2); dome.rotateX(-Math.PI / 2); dome.scale(1, 1, 0.3);
+        L.add(dome, 'tail', m.clone().multiply(new THREE.Matrix4().makeRotationY(-Math.PI / 2)));
+        add(new THREE.CircleGeometry(r * 0.36, 24).rotateY(Math.PI), 'tailLit', -r * 0.3);
+      }
+      // three projector units behind each clear headlamp cover
+      for (const x of [2215, 2115, 2010]) {
+        const q = body.at(x, body.J.B + 23), n = V(q.n.x, q.n.y, s * q.n.z), c = V(q.p.x, q.p.y, s * q.p.z).addScaledVector(n, -27);
+        L.add(new THREE.SphereGeometry(19, 20, 14), 'lampLens', T(c.x, c.y, c.z));
+        L.add(new THREE.TorusGeometry(22, 3.2, 8, 28), 'chrome', alignY(n.toArray(), c.clone().addScaledVector(n, 6).toArray()).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)));
+      }
+    }
+    L.add(rb(8, 34, 150, 4), 'tailLit', T(CAR.rear - 4, 420, 0));
+    const lg = L.build({ cast: false }); shell.add(lg); reg('lights', lg);
   }
 
   // aero: splitter, diffuser, exhaust surrounds
@@ -285,6 +328,14 @@ export function buildCar(M) {
     P.add(cylX(108, 110, 32), 'steelDark', T(650, 640, -330));
     P.add(cylY(34, 70, 20), 'ceramic', T(700, 730, -330));
     P.add(cylY(60, 150, 24), 'plastic', T(1900, 560, -420));
+    P.add(cylY(24, 12, 16), 'anoBlue', T(1900, 641, -420));
+    P.add(rb(170, 150, 130, 30), 'ceramic', T(1700, 588, 430));
+    P.add(cylY(30, 16, 20), 'plastic', T(1700, 671, 430));
+    P.add(rb(210, 70, 150, 12), 'plastic', T(790, 640, 440));
+    P.add(cylY(22, 9, 16), 'damper', T(700, 769, -330));
+    P.add(rb(70, 2, 40, 1), 'machined', T(1360, 748, 430));
+    pipe(P, [V(700, 600, -385), V(900, 640, -470), V(1300, 650, -520), V(1700, 600, -500)], 9, 'rubber', 8);
+    pipe(P, [V(780, 660, 370), V(1000, 690, 470), V(1500, 660, 520), V(1960, 520, 480)], 11, 'rubber', 8);
     const g = P.build(); root.add(g); reg('chassis', g);
   }
 
@@ -309,6 +360,7 @@ export function buildCar(M) {
         rod(P, d0, mid, 30, 'damper', 20); rod(P, mid, d1, 14, 'journal', 12);
         P.add(springGeo.clone(), 'coilSpring', alignY(dir.toArray(), up.toArray()));
         for (const f of [0.44, 0.88]) P.add(cylY(56, 8, 24), 'machined', alignY(dir.toArray(), d0.clone().lerp(d1, f).toArray()));
+        rod(P, V(a.x + (front ? -150 : 150), a.y + 60, s * (zt - 20)), V(a.x + (front ? -200 : 200), a.y + 210, s * 450), 6, 'rubber', 8);
         // track rod
         const ox = front ? 140 : -150;
         rod(P, V(a.x + ox, a.y - 30, s * (zt - 6)), V(a.x + ox, a.y - 40, s * 330), 10, 'steel');
@@ -397,10 +449,10 @@ export function buildCar(M) {
       const z = s * 425;
       const seat = (geo, mat, p, rz = 0) => P.add(geo, mat, mat4({ p: [p[0], p[1], z + (p[2] || 0)], r: [0, 0, rz] }));
       seat(rb(520, 120, 420, 50), 'leather', [-380, 286], 0.12);
-      seat(rb(380, 30, 300, 14), 'alcantara', [-380, 348], 0.12);
+      seat(rb(380, 30, 300, 14), 'quilt', [-380, 348], 0.12);
       for (const k of [1, -1]) seat(rb(470, 150, 70, 34), 'leather', [-375, 318, k * 208], 0.12);
       seat(rb(120, 620, 400, 52), 'leather', [-712, 610], 0.36);
-      seat(rb(30, 420, 270, 14), 'alcantara', [-650, 600], 0.36);
+      seat(rb(30, 420, 270, 14), 'quilt', [-650, 600], 0.36);
       for (const k of [1, -1]) seat(rb(170, 520, 70, 34), 'leather', [-668, 570, k * 205], 0.36);
       seat(rb(120, 180, 250, 44), 'leather', [-836, 960], 0.36);
       seat(rb(40, 760, 440, 30), 'carbon', [-762, 640], 0.36);
@@ -421,7 +473,19 @@ export function buildCar(M) {
     const mid = new THREE.PlaneGeometry(250, 130); mid.rotateY(-Math.PI / 2);
     P.add(rb(16, 150, 270, 6), 'gloss', mat4({ p: [372, 786, 0], r: [0, 0, 0.3] }));
     P.add(mid, 'screen', mat4({ p: [362, 788, 0], r: [0, 0, 0.3] }));
-    for (const z of [-720, 720, -160, 160]) P.add(cylX(34, 20, 20), 'chrome', mat4({ p: [368, 790, z + (Math.abs(z) < 200 ? 0 : 0)], r: [0, 0, 0.2] }));
+    // round air vents, passenger display, luggage straps
+    for (const z of [-720, 720, -170, 170]) {
+      P.add(cylX(36, 20, 28), 'chrome', mat4({ p: [368, 792, z], r: [0, 0, 0.2] }));
+      P.add(cylX(29, 22, 28), 'gloss', mat4({ p: [366, 792, z], r: [0, 0, 0.2] }));
+      for (const k of [-1, 0, 1]) P.add(rb(24, 3, 52, 1), 'carbon', mat4({ p: [357, 792 + k * 13, z], r: [0, 0, 0.2] }));
+    }
+    const pd = new THREE.PlaneGeometry(280, 44); pd.rotateY(-Math.PI / 2);
+    P.add(pd, 'screen', mat4({ p: [366, 842, 425], r: [0, 0, 0.2] }));
+    for (const z of [-270, 270]) {
+      P.add(rb(560, 7, 46, 2), 'leather', mat4({ p: [-1250, 918, z], r: [0, 0, -0.07] }));
+      P.add(rb(40, 12, 54, 3), 'chrome', mat4({ p: [-1110, 912, z], r: [0, 0, -0.07] }));
+    }
+    for (const k of [-1, 0, 1]) P.add(cylY(15, 10, 16), 'caliper', T(160, 470, k * 52));
     // tunnel console, selector, armrest
     P.add(rb(1000, 46, 330, 20), 'leather', T(-110, 440, 0));
     P.add(rb(260, 70, 230, 26), 'alcantara', T(-560, 494, 0));
@@ -443,10 +507,14 @@ export function buildCar(M) {
     for (const an of [0, Math.PI, -Math.PI / 2]) S.add(rb(150, 30, 14, 6), 'carbon', mat4({ p: [86 * Math.cos(an), 86 * Math.sin(an), -6], r: [0, 0, an] }));
     S.add(rb(96, 84, 40, 20), 'alcantara', T(0, 0, -6));
     S.add(cylZ(20, 6, 20), 'caliper', T(118, -22, 10));
+    for (let k = -2; k <= 2; k++) S.add(rb(16, 7, 6, 2), 'tailLit', mat4({ p: [172 * Math.sin(k * 0.12), 172 * Math.cos(k * 0.12) - 1, 13], r: [0, 0, -k * 0.12] }));
+    S.add(cylZ(14, 5, 16), 'chrome', T(-118, -22, 10));
     steeringWheel.add(S.build());
     const col = new THREE.Group(); col.position.set(268, 770, -425); col.rotation.set(0, -Math.PI / 2, 0); col.rotateX(-0.36);
     col.add(steeringWheel);
-    const C2 = new Part('cabin', M); C2.add(cylZ(26, 200, 18), 'plastic', T(0, 0, -108)); col.add(C2.build());
+    const C2 = new Part('cabin', M); C2.add(cylZ(26, 200, 18), 'plastic', T(0, 0, -108));
+    for (const k of [1, -1]) C2.add(rb(120, 170, 9, 4), 'carbon', mat4({ p: [k * 150, 22, -34], r: [0, 0, k * 0.1] }));       // shift paddles
+    col.add(C2.build());
     cab.add(col);
     anchor('cabin', cab, [-700, 1020, 425], 'Cabin', [0, 1, 0], 'r', true);
   }

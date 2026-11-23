@@ -4,7 +4,7 @@ import { buildEngine } from './engine.js';
 import { buildCar } from './car.js';
 import { createStage, SECTIONS } from './stage.js';
 import { createUI } from './ui.js';
-import { createAudio } from './audio.js';
+import { createAudio, VOICES, VOICE_ORDER } from './audio.js';
 import { E, PARTS, LAYERS, CAR_LAYERS, FINISHES, GEARS, FINAL_DRIVE, TYRE_R } from './config.js';
 
 const TAU = Math.PI * 2;
@@ -14,10 +14,10 @@ const state = {
   explode: 0, explodeTarget: 0,
   mode: 'studio', section: 'long', sectionPos: 0.5,
   selected: null, isolated: false,
-  callouts: true, spin: false, sound: false, clean: false,
+  callouts: true, spin: false, sound: null, clean: false,
   bonnet: 0, bonnetOpen: false, doors: 0, doorsOpen: false, lights: true, steer: 0, gear: 0, roll: 0, speed: 0,
   finishes: {
-    paint: 'rosso', roof: 'body', wheels: 'silver', calipers: 'red', interior: 'cuoio',
+    paint: 'rosso', roof: 'body', wheels: 'silver', calipers: 'yellow', interior: 'cuoio',
     covers: 'rosso', block: 'cast', intake: 'polished', exhaust: 'titanium',
   },
   layers: {},
@@ -65,7 +65,7 @@ async function boot() {
     stage.setExploded(state.subject === 'engine' && e > 0.04);
   };
   const setLamps = on => {
-    M.drl.emissiveIntensity = on ? 2.8 : 0.04; M.tailLit.emissiveIntensity = on ? 2.6 : 0.08; M.tail.emissiveIntensity = on ? 0.25 : 0.02;
+    M.drl.emissiveIntensity = on ? 2.8 : 0.04; M.tailLit.emissiveIntensity = on ? 1.9 : 0.06; M.tail.emissiveIntensity = on ? 0.25 : 0.02; M.lampLens.emissiveIntensity = on ? 1.1 : 0.02;
     stage.syncClipped();
   };
 
@@ -151,8 +151,12 @@ async function boot() {
         else elx.requestFullscreen?.().catch(() => {});
         return;
       }
-      if (key === 'sound') state.sound = audio.setEnabled(!state.sound);
-      else state[key] = !state[key];
+      if (key === 'sound') {
+        // off → Berlinetta → Corsa → off
+        const next = VOICE_ORDER[VOICE_ORDER.indexOf(state.sound) + 1] || null;
+        state.sound = audio.setVoice(next);
+        ui.toast(state.sound ? 'Sound: ' + VOICES[state.sound].label : next ? 'Sound is not available in this browser' : 'Sound off');
+      } else state[key] = !state[key];
       if (key === 'spin') stage.controls.autoRotate = state.spin;
       if (key === 'clean') measure();
       if (key === 'lights') setLamps(state.lights);
@@ -274,7 +278,7 @@ async function boot() {
     stage.render(dt, frames > 30);
     ui.update(dt, engine);
     ui.updateCallouts(stage.project);
-    audio.update(state.rpmShown, state.throttle);
+    audio.update(state.rpmShown, state.throttle, dt);
     if (++frames === 2) {
       document.getElementById('veil').classList.add('done');
       state.running = true; ui.sync();

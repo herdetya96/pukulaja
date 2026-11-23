@@ -32,20 +32,20 @@ export function keyed(pts) {
 }
 
 // ---- the design, as curves along the length of the car ---------------------
-const yTop = keyed([[-2260, 868], [-2200, 906], [-2100, 918], [-1900, 946], [-1620, 1004], [-1300, 1100], [-900, 1200], [-500, 1262],
-  [-250, 1272], [0, 1256], [130, 1228], [400, 1085], [660, 946], [760, 902], [1000, 866], [1360, 814], [1800, 722], [2150, 606], [2330, 502], [2390, 448]]);
+const yTop = keyed([[-2260, 902], [-2200, 946], [-2100, 960], [-1900, 982], [-1620, 1032], [-1300, 1112], [-900, 1202], [-500, 1262],
+  [-250, 1272], [0, 1256], [130, 1228], [400, 1085], [660, 946], [760, 902], [1000, 864], [1360, 808], [1800, 716], [2150, 602], [2330, 502], [2390, 448]]);
 const yBot = keyed([[-2260, 345], [-2050, 235], [-1780, 150], [-1360, 138], [1360, 138], [2000, 148], [2250, 196], [2390, 240]]);
 const wMax = keyed([[-2260, 800], [-2150, 884], [-1900, 958], [-1360, 994], [-900, 966], [-300, 950], [300, 948], [900, 962], [1360, 988],
   [1800, 952], [2150, 858], [2330, 706], [2390, 600]]);
-const ySh = keyed([[-2260, 800], [-2100, 884], [-1900, 928], [-1360, 968], [-900, 946], [-300, 916], [300, 896], [700, 886], [1000, 852],
-  [1360, 808], [1800, 716], [2150, 598], [2330, 486], [2390, 432]]);
+const ySh = keyed([[-2260, 846], [-2100, 920], [-1900, 954], [-1360, 984], [-900, 950], [-300, 916], [300, 896], [700, 886], [1000, 860],
+  [1360, 834], [1800, 738], [2150, 604], [2330, 486], [2390, 432]]);
 const shIn = keyed([[-2260, 40], [-1900, 70], [-1360, 86], [-300, 72], [700, 70], [1360, 80], [2150, 60], [2390, 30]]);
 const tuck = keyed([[-2260, 40], [-1800, 70], [1800, 70], [2390, 40]]);
 const bow = keyed([[-2260, -200], [-1900, -90], [-1600, 0], [-1100, 0], [-500, 0], [130, 40], [700, 80], [1000, 30], [1250, 0], [1500, 0],
   [1750, 40], [2100, 150], [2390, 290]]);
-const bulge = keyed([[700, 0], [900, 16], [1500, 24], [2000, 10], [2300, 0]]);
+const bulge = keyed([[700, 0], [900, 20], [1500, 34], [2000, 16], [2300, 0]]);
 const wSh = x => wMax(x) - shIn(x);
-const railY = keyed([[CAR.tail, ySh(CAR.tail)], [-1500, 992], [-1200, 1076], [-900, 1160], [-500, 1222], [-250, 1236], [0, 1222], [130, 1198],
+const railY = keyed([[CAR.tail, ySh(CAR.tail)], [-1500, 1012], [-1200, 1088], [-900, 1162], [-500, 1222], [-250, 1236], [0, 1222], [130, 1198],
   [400, 1062], [CAR.cowl, ySh(CAR.cowl)]]);
 const railZ = keyed([[CAR.tail, wSh(CAR.tail)], [-1500, 806], [-1200, 704], [-900, 632], [-500, 600], [-250, 595], [0, 600], [130, 612],
   [400, 724], [CAR.cowl, wSh(CAR.cowl)]]);
@@ -67,12 +67,17 @@ export function section(x) {
   const pts = [];
   for (const f of [0, 0.35, 0.68, 0.86, 1]) pts.push([wb * f, yb]);
   const cz = (8 * wm - wb - ws) / 6;
-  // a scallop drawn back from the front wheel along the door, and a faint one
-  // ahead of the rear wheel: these are what catch the light on the flank
-  const sc = 26 * Math.exp(-(((x - 760) / 520) ** 2)) * (x < 960 ? 1 : Math.max(0, 1 - (x - 960) / 60)) + 9 * Math.exp(-(((x + 620) / 300) ** 2));
+  // The flank is hollowed behind the front wheel, as on the big front-engined
+  // V12 berlinettas: deepest at the wing vent, fading along the door, with a
+  // hard upper edge that climbs towards the rear haunch.
+  const ss = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
+  const sc = 48 * ss(-760, 520, x) * (1 - ss(930, 975, x));
+  const t0 = 0.42 + 0.16 * (1 - ss(-600, 900, x));
+  const sr = 10 * Math.exp(-(((x + 700) / 260) ** 2));
   for (let k = 0; k < NB; k++) {
     const t = k / (NB - 1), p = bez([wb, yb], [cz, yb + 0.1 * H], [cz, ys - 0.16 * H], [ws, ys], t);
-    p[0] -= sc * Math.exp(-(((t - 0.36) / 0.17) ** 2));
+    const d = t - t0;
+    p[0] -= sc * Math.exp(-((d / (d < 0 ? 0.26 : 0.065)) ** 2)) + sr * Math.exp(-(((t - 0.3) / 0.15) ** 2));
     pts.push(p);
   }
   const dz = wr - ws, dy = yr - ys, len = Math.hypot(dz, dy) || 1, nz = dy / len, ny = -dz / len, bowC = Math.min(14, len * 0.05);
@@ -181,9 +186,8 @@ export function buildBody(M) {
       if (inside[i][j] && inside[i + 1][j] && inside[i][j + 1] && inside[i + 1][j + 1]) return null;
       if (r < 3) return ['body', x > -1830 && x < 1860 ? 'carSill' : 'paint'];
       if (between(x, [1930, 2290]) && r >= 3 && r <= 9) return ['body', 'vent'];
-      if (between(x, [1900, 2300]) && r >= (x < 2010 ? 23 : 20)) return ['lights', 'lens'];
-      if (x < -2120 && r >= 19 && r <= 23) return ['lights', 'tail'];
-      if (between(x, [780, 915]) && r >= 9 && r <= 17) return ['body', 'vent'];
+      if (between(x, [1850, 2300]) && r >= 21) return ['lights', 'lampGlass'];
+      if (between(x, [790, 925]) && r >= 8 && r <= 16) return ['body', 'vent'];
       if (door) return ['door' + side, 'paint'];
       return ['body', 'paint'];
     }
@@ -214,6 +218,10 @@ export function buildBody(M) {
       const c = classify(i, j, sz);
       if (!c) continue;
       quad(bucket(c[0], c[1]), sz, p, n);
+      if (c[1] === 'lampGlass') {          // reflector bowl behind the clear cover
+        for (let k = 0; k < 4; k++) tmpP[k].copy(p[k]).addScaledVector(n[k], -46);
+        quad(bucket('lights', 'lampBucket'), sz, tmpP, n);
+      }
       // cabin lining behind every opaque panel that faces the occupants
       const x = (X[i] + X[i + 1]) / 2;
       const opening = c[0] === 'hood' || c[0].startsWith('door');
@@ -237,7 +245,7 @@ export function buildBody(M) {
         const p = front ? [pt(j, s0), pt(j + 1, s0), pt(j + 1, s1), pt(j, s1)] : [pt(j, s0), pt(j, s1), pt(j + 1, s1), pt(j + 1, s0)];
         const n = p.map(v => nrm(v.z));
         const ym = (P[i][j].y + P[i][j + 1].y) / 2;
-        const mat = front ? 'grille' : ym < 540 ? 'carUnder' : 'paint';
+        const mat = front ? 'grille' : ym < 548 ? 'carUnder' : 'paint';
         quad(bucket('body', mat), 1, p, n);
       }
     }
@@ -275,6 +283,8 @@ export function buildBody(M) {
   gap(alongRow(J.B + 3, CAR.door[0], CAR.door[1]));
   // boot lid, fuel flap
   gap(alongStation(-1700, J.D + 2, J.N - 1)); gap(alongRow(J.D + 2, CAR.rear + 40, -1700));
+  // bumper-to-wing seams
+  gap(alongStation(1795, J.B + 12, J.C - 2), 4); gap(alongStation(-1810, J.B + 10, J.C - 1), 4);
   // fuel filler flap on the right rear wing
   {
     const i0 = iAt(-1770), i1 = iAt(-1640), j0 = J.B + 17, j1 = J.B + 22;
@@ -282,24 +292,21 @@ export function buildBody(M) {
     for (const j of [j0, j1]) { const p = [], n = []; for (let i = i0; i <= i1; i++) { p.push(P[i][j]); n.push(Nn[i][j]); } edge(p, n); }
     for (const i of [i0, i1]) { const p = [], n = []; for (let j = j0; j <= j1; j++) { p.push(P[i][j]); n.push(Nn[i][j]); } edge(p, n); }
   }
-  // daytime running blades and the tail-lamp wrap
-  ribbon('lights', 'drl', ...alongRow(J.B + 24, 1915, 2296), 9, 1.4);
-  ribbon('lights', 'drl', ...alongRow(J.B + 21, 2020, 2290), 6, 1.4);
-  ribbon('lights', 'tailLit', ...alongRow(J.B + 21, CAR.rear, -2125), 16, 1.4);
+  // daytime running light: an L that follows the wing top and drops at the nose
+  ribbon('lights', 'drl', ...alongRow(J.C - 1, 1860, 2296), 10, 2.2);
+  ribbon('lights', 'drl', ...alongStation(2262, J.B + 20, J.C - 1), 10, 2.2);
   // bright surround to the side glass, and the grille frame
   ribbon('body', 'chrome', ...alongRow(J.C, CAR.sideGlass[0] + 10, 640), 9, 1.2);
   ribbon('body', 'chrome', ...alongStation(CAR.front, J.B, J.N - 1), 16, 1.5);
-  // tail-lamp bar across the back
+  // number-plate recess across the back
   {
-    const i = 0, j = J.B + 21, b = bow(X[i]), pts = [], nr = [];
-    for (let k = 0; k <= 30; k++) {
-      const z = P[i][j].z * (-1 + 2 * k / 30);
+    const i = 0, j = J.B + 14, b = bow(X[i]), pts = [], nr = [];
+    for (let k = 0; k <= 16; k++) {
+      const z = -300 + 600 * k / 16;
       pts.push(new THREE.Vector3(X[i] - b * (z / BOW_REF) ** 2 - 1.5, P[i][j].y, z));
-      nr.push(new THREE.Vector3(-1, 0, -2 * b * z / (BOW_REF * BOW_REF)).normalize());
+      nr.push(new THREE.Vector3(-1, 0, 0));
     }
-    ribbon('lights', 'tailLit', pts, nr, 16, 0.5, false);
-    const pl = pts.map(p => p.clone().setY(p.y - 150)).filter(p => Math.abs(p.z) < 300);
-    ribbon('body', 'gloss', pl, nr.slice(0, pl.length).map(() => new THREE.Vector3(-1, 0, 0)), 150, 1, false);
+    ribbon('body', 'gloss', pts, nr, 150, 1, false);
   }
 
   // ---- meshes ----------------------------------------------------------------
@@ -314,8 +321,9 @@ export function buildBody(M) {
     const mesh = new THREE.Mesh(g, M[b.mat]);
     mesh.name = b.mesh + ':' + b.mat;
     mesh.userData.part = PART[b.mesh]; mesh.userData.matKey = b.mat;
-    mesh.castShadow = b.mat !== 'carGlass' && b.mat !== 'gap'; mesh.receiveShadow = b.mat !== 'gap';
-    if (b.mat === 'carGlass') mesh.renderOrder = 3;
+    const clear = b.mat === 'carGlass' || b.mat === 'lampGlass';
+    mesh.castShadow = !clear && b.mat !== 'gap'; mesh.receiveShadow = b.mat !== 'gap';
+    if (clear) mesh.renderOrder = 3;
     (groups[b.mesh] ??= new THREE.Group()).add(mesh);
     groups[b.mesh].name = b.mesh;
   }
@@ -333,5 +341,5 @@ export function buildBody(M) {
 
   // surface lookup for things that sit on the body (mirrors, wipers, badges)
   const at = (x, j) => { const i = iAt(x); return { p: P[i][j].clone(), n: Nn[i][j].clone() }; };
-  return { groups, at, J, X, iAt, P, Nn };
+  return { groups, at, J, X, iAt, P, Nn, plateY: P[0][J.B + 14].y };
 }

@@ -204,6 +204,9 @@ input[type=range]:disabled{opacity:.35;cursor:default}
 #tip{position:absolute;z-index:7;left:0;top:0;pointer-events:none;padding:4px 8px;border-radius:4px;background:rgba(12,13,16,.9);border:1px solid var(--line-strong);
   font:500 9.5px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
 
+#toast{position:absolute;z-index:8;top:66px;right:var(--gr);padding:7px 12px;border-radius:999px;background:rgba(12,13,16,.9);border:1px solid rgba(255,180,84,.5);
+  font:500 10.5px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--amber);white-space:nowrap}
+
 /* veil */
 #veil{position:absolute;inset:0;z-index:20;display:grid;place-content:center;gap:16px;text-align:center;background:var(--bg);transition:opacity .7s ease .1s}
 #veil.done{opacity:0;pointer-events:none}
@@ -288,7 +291,7 @@ input[type=range]:disabled{opacity:.35;cursor:default}
     <div class="tools">
       <button class="tool" id="tool-callouts" aria-pressed="true" title="Part callouts" aria-label="Part callouts"><svg viewBox="0 0 24 24"><path d="M4 12V5a1 1 0 0 1 1-1h7l8 8-8 8-8-8Z"/><circle cx="8.5" cy="8.5" r="1.2"/></svg></button>
       <button class="tool" id="tool-spin" aria-pressed="false" title="Turntable" aria-label="Turntable"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg></button>
-      <button class="tool" id="tool-sound" aria-pressed="false" title="Engine sound" aria-label="Engine sound"><svg viewBox="0 0 24 24"><path d="M4 10v4h3l5 4V6L7 10H4Z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg></button>
+      <button class="tool" id="tool-sound" aria-pressed="false" title="Engine sound: click to cycle off, Berlinetta, Corsa" aria-label="Engine sound"><svg viewBox="0 0 24 24"><path d="M4 10v4h3l5 4V6L7 10H4Z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg></button>
       <button class="tool" id="tool-clean" aria-pressed="false" title="Hide panels (H)" aria-label="Hide panels"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 5v14M16 5v14"/></svg></button>
       <button class="tool" id="tool-full" aria-pressed="false" title="Fullscreen" aria-label="Fullscreen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
     </div>
@@ -297,6 +300,7 @@ input[type=range]:disabled{opacity:.35;cursor:default}
   <main id="stage">
     <div id="callouts"></div>
     <div id="tip" hidden></div>
+    <div id="toast" role="status" hidden></div>
     <nav id="views" aria-label="Camera views">
       <button data-view="hero">Hero</button>
       <button data-view="front">Front</button>

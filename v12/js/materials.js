@@ -71,7 +71,7 @@ export function createMaterials() {
   const hexMap = T.tex(T.hexMesh(), { srgb: true, repeat: [1.1, 1.27] });
   const phys = o => new THREE.MeshPhysicalMaterial(o);
   Object.assign(M, {
-    paint: phys({ color: '#7d0a0c', metalness: 0.35, roughness: 0.46, clearcoat: 1, clearcoatRoughness: 0.035 }),
+    paint: phys({ color: '#7d0a0c', metalness: 0.35, roughness: 0.46, clearcoat: 1, clearcoatRoughness: 0.035, envMapIntensity: 0.85 }),
     roof: phys({ color: '#7d0a0c', metalness: 0.35, roughness: 0.46, clearcoat: 1, clearcoatRoughness: 0.035 }),
     carGlass: phys({ color: '#05080b', metalness: 0, roughness: 0.02, transparent: true, opacity: 0.66, depthWrite: false, envMapIntensity: 1.6 }),
     gloss: std({ color: '#050506', metalness: 0.2, roughness: 0.1 }),
@@ -81,9 +81,14 @@ export function createMaterials() {
     vent: std({ color: '#ffffff', metalness: 0.5, roughness: 0.55, map: hexMap }),
     grille: std({ color: '#ffffff', metalness: 0.5, roughness: 0.5, map: hexMap }),
     lens: std({ color: '#0b0d12', metalness: 0.5, roughness: 0.04 }),
+    lampGlass: phys({ color: '#dfe8f0', metalness: 0, roughness: 0.03, transparent: true, opacity: 0.2, depthWrite: false, envMapIntensity: 1.7 }),
+    lampBucket: std({ color: '#0c0d10', metalness: 0.9, roughness: 0.34 }),
+    lampLens: std({ color: '#f4f8ff', metalness: 0.9, roughness: 0.05, emissive: '#dfeaff', emissiveIntensity: 1.1 }),
+    capBadge: std({ color: '#e0b000', metalness: 0.3, roughness: 0.3 }),
+    quilt: std({ color: '#17181a', metalness: 0, roughness: 0.92, bumpMap: T.tex(T.quilt(), { repeat: [5, 5] }), bumpScale: 6 }),
     tail: std({ color: '#3a0306', metalness: 0.3, roughness: 0.08, emissive: '#ff1408', emissiveIntensity: 0.25 }),
     drl: std({ color: '#ffffff', emissive: '#e4ecff', emissiveIntensity: 2.8, side: THREE.DoubleSide }),
-    tailLit: std({ color: '#ff2a1a', emissive: '#ff1a0a', emissiveIntensity: 2.6, side: THREE.DoubleSide }),
+    tailLit: std({ color: '#b00804', emissive: '#ff0a03', emissiveIntensity: 1.9, side: THREE.DoubleSide }),
     gap: std({ color: '#020202', metalness: 0, roughness: 1 }),
     chrome: std({ color: '#eceef2', metalness: 1, roughness: 0.05 }),
     mirror: std({ color: '#dfe6ee', metalness: 1, roughness: 0.02 }),

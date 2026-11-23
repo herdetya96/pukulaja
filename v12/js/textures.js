@@ -258,6 +258,18 @@ export function tread() {
   return c;
 }
 
+// Diamond quilting for seat and door inserts.
+export function quilt() {
+  const [c, g] = canvas(64, 64);
+  g.fillStyle = '#b0b0b0'; g.fillRect(0, 0, 64, 64);
+  g.strokeStyle = '#303030'; g.lineWidth = 3;
+  for (let k = -64; k <= 128; k += 32) {
+    g.beginPath(); g.moveTo(k, 0); g.lineTo(k + 64, 64); g.stroke();
+    g.beginPath(); g.moveTo(k + 64, 0); g.lineTo(k, 64); g.stroke();
+  }
+  return c;
+}
+
 // Radiator core: fine horizontal fins.
 export function fins() {
   const [c, g] = canvas(8, 16);

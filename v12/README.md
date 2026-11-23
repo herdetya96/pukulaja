@@ -26,14 +26,23 @@ the same running model.
 
 - A two-seat fastback, 4,650 mm long on a 2,720 mm wheelbase, with the V12
   mounted behind the front axle and a transaxle at the rear.
+- **Styling reference** – proportions and cues are taken from Ferrari's
+  front-engined V12 berlinettas, the 812 Superfast in particular: long bonnet
+  and set-back cabin, wings that rise above the bonnet line, a deep scallop in
+  the flank behind the front wheel, a high cut-off tail with four round lamps,
+  quad tailpipes, twin-spoke wheels and yellow calipers. It is an original
+  model drawn in that idiom, not a replica, and carries no Ferrari name or
+  badge.
 - **Body** – one lofted surface: paint, glass, bonnet, doors, lamps and vents
   are regions of the same grid, so panels meet exactly. Wheel arches are cut
   into it, and the cabin is lined behind every panel.
-- **Detail** – ten-spoke centre-lock wheels with treaded, lettered tyres,
-  drilled carbon-ceramic discs and six-piston calipers; double wishbones with
+- **Detail** – five twin-spoke wheels with treaded, lettered tyres, drilled
+  carbon-ceramic discs and six-piston calipers; clear-covered headlamps with
+  projector units; double wishbones with
   coil-over dampers; a carbon tub with roof hoop; torque tube, transaxle and
   half shafts; a twin exhaust from manifold to tailpipe; radiator pack; seats,
-  harnesses, dashboard, displays and a steering wheel that turns.
+  harnesses, quilted inserts, door cards, round vents, displays, shift paddles
+  and a steering wheel that turns.
 - **Configure** – paint, roof, wheel finish, caliper colour and leather, plus
   the engine's own finishes.
 - **Open it up** – raise the bonnet, swing the doors, switch the lamps, steer
@@ -60,7 +69,10 @@ the same running model.
   as the model.
 - **Parts** – click any component for its material, key figures and what it
   does; focus the camera on it or isolate its layer.
-- **Sound** – an optional synthesised exhaust note locked to firing frequency.
+- **Sound** – two synthesised voices, cycled with the speaker button
+  (Berlinetta, Corsa). Each cylinder bank plays one engine cycle of exhaust
+  pulses through fixed exhaust resonances, with induction roar, a short room
+  reverb and crackle on the overrun. No recording is used.
 
 Keys: `Space` start/stop, `C` car/engine, `1` `2` `3` view modes, `E` explode or
 lift the body, `B` bonnet, `D` doors, `L` lamps, `H` hide panels, `Esc` clear
