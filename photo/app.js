@@ -10,6 +10,10 @@
   const ASPECTS = ['', '1:1', '4:5', '3:4', '2:3', '9:16', '5:4', '4:3', '3:2', '16:9', '21:9'];
   const ACCENTS = ['#FFD60A', '#FF9F0A', '#FF453A', '#FF375F', '#BF5AF2', '#0A84FF', '#64D2FF', '#30D158', '#FFFFFF'];
 
+  /** True when the page runs inside a claude.ai artifact: saving goes through the host, and Web Share is unavailable. */
+  const HOSTED = typeof window.claude?.use === 'function';
+  const hostTheme = document.documentElement.dataset.theme || '';
+
   /* ───────── helpers ───────── */
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -102,8 +106,11 @@
   const mqLight = window.matchMedia('(prefers-color-scheme: light)');
   function applyAppearance() {
     const root = document.documentElement;
-    const theme = C.app.theme === 'auto' ? (mqLight.matches ? 'light' : 'dark') : C.app.theme;
-    root.dataset.theme = theme;
+    // "auto" leaves the choice to the system (or to the host page's own theme switch)
+    if (C.app.theme !== 'auto') root.dataset.theme = C.app.theme;
+    else if (hostTheme) root.dataset.theme = hostTheme;
+    else delete root.dataset.theme;
+    const theme = root.dataset.theme || (mqLight.matches ? 'light' : 'dark');
     const accent = /^#[0-9a-f]{6}$/i.test(C.app.accent) ? C.app.accent : '#FFD60A';
     root.style.setProperty('--accent', accent);
     const [r, g, b] = [1, 3, 5].map((i) => parseInt(accent.slice(i, i + 2), 16));
@@ -113,7 +120,8 @@
     if (theme === 'light' && lum > 0.9) root.style.setProperty('--accent-ink', '#000');
     else if (theme === 'dark' && lum < 0.12) root.style.setProperty('--accent-ink', '#fff');
     else root.style.removeProperty('--accent-ink');
-    $('meta[name="theme-color"]').content = theme === 'light' ? '#F2F2F7' : '#000000';
+    const meta = $('meta[name="theme-color"]');
+    if (meta) meta.content = theme === 'light' ? '#F2F2F7' : '#000000';
     const name = C.app.name || 'Slash Photo';
     document.title = name;
     $$('[data-app-name]').forEach((el) => (el.textContent = name));
@@ -474,16 +482,25 @@
   /* ───────── export / share ───────── */
   const fileName = (cmds) => `${(C.app.name || 'slash').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${(cmds?.[0] || 'edit')}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}`;
   const extOf = (blob) => (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
-  function download(blob, name) {
+  async function download(blob, name) {
+    const filename = `${name}.${extOf(blob)}`;
+    if (HOSTED) {
+      const dl = await window.claude.use('downloads').catch(() => null);
+      if (!dl) return toast('Tampilan ini tidak bisa menyimpan file — tekan lama fotonya');
+      try { await dl.save({ filename, data: blob }); }
+      catch (e) { if (e?.code !== 'declined') toast(e?.code === 'rate_limited' ? 'Tunggu sebentar, lalu coba lagi' : 'Tidak bisa menyimpan di tampilan ini'); }
+      return;
+    }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `${name}.${extOf(blob)}`;
+    a.download = filename;
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   }
+  const canShareFiles = (blob) => !HOSTED && !!navigator.canShare?.({ files: [new File([blob], 'a.' + extOf(blob), { type: blob.type })] });
   async function share(blob, name) {
     const file = new File([blob], `${name}.${extOf(blob)}`, { type: blob.type });
-    if (navigator.canShare?.({ files: [file] })) {
+    if (canShareFiles(blob)) {
       try { await navigator.share({ files: [file] }); } catch { /* user cancelled */ }
     } else download(blob, name);
   }
@@ -511,16 +528,16 @@
       const cmds = p ? [p.cmd] : [];
       if (C.image.autoSave) await addShot({ blob, cmds, model: 'editor' });
       const url = URL.createObjectURL(blob), name = fileName(cmds);
-      const canShare = !!navigator.canShare?.({ files: [new File([blob], 'a.jpg', { type: blob.type })] });
+      const canShare = canShareFiles(blob);
       const sh = sheet({
         title: 'Siap disimpan',
         html: `<img class="viewer-img" src="${url}" alt="Hasil akhir">
           <div class="viewer-meta">${w} × ${h} px · ${(blob.size / 1048576).toFixed(1)} MB${C.image.autoSave ? ' · sudah masuk Galeri' : ''}</div>
           <div class="btn-grid">
             ${canShare ? '<button class="btn btn-primary" type="button" data-a="share">Simpan / Bagikan</button><button class="btn" type="button" data-a="save">Unduh file</button>'
-              : '<button class="btn btn-primary" type="button" data-a="save" style="grid-column:1/-1">Unduh file</button>'}
+              : '<button class="btn btn-primary" type="button" data-a="save" style="grid-column:1/-1">Simpan file</button>'}
           </div>
-          <div class="group-foot" style="padding:0 4px">Di iPhone: “Simpan / Bagikan” lalu pilih Simpan Gambar, atau tekan lama fotonya.</div>`,
+          ${canShare ? '<div class="group-foot" style="padding:0 4px">Di iPhone: “Simpan / Bagikan” lalu pilih Simpan Gambar, atau tekan lama fotonya.</div>' : ''}`,
         onClose: () => setTimeout(() => URL.revokeObjectURL(url), 500),
       });
       sh.body.addEventListener('click', (e) => {
@@ -948,8 +965,8 @@
       html: `<img class="viewer-img" src="${url}" alt="Hasil edit">
         <div class="viewer-meta">${esc(when)}${s.model && s.model !== 'editor' ? ` · <span class="mono">${esc(s.model)}</span>` : ''}</div>
         <div class="btn-grid">
-          <button class="btn btn-primary" type="button" data-a="share">Simpan / Bagikan</button>
-          <button class="btn" type="button" data-a="save">Unduh file</button>
+          ${canShareFiles(s.blob) ? '<button class="btn btn-primary" type="button" data-a="share">Simpan / Bagikan</button><button class="btn" type="button" data-a="save">Unduh file</button>'
+            : '<button class="btn btn-primary" type="button" data-a="save" style="grid-column:1/-1">Simpan file</button>'}
           <button class="btn" type="button" data-a="use">Edit lagi</button>
           <button class="btn btn-danger" type="button" data-a="del">Hapus</button>
         </div>
@@ -1066,7 +1083,7 @@
       save(); selectFx(null); renderAll(); queueThumbs(); toast('100 efek bawaan dipulihkan');
     }
     if (act === 'clear-gallery' && await ask({ title: 'Kosongkan Galeri?', text: 'Semua hasil di perangkat ini dihapus permanen.', ok: 'Hapus semua', danger: true })) {
-      await DB.clear(); toast('Galeri dikosongkan');
+      try { await DB.clear(); toast('Galeri dikosongkan'); } catch { toast('Galeri tidak bisa diakses'); }
     }
     if (act === 'reset-all' && await ask({ title: 'Reset semua setelan?', text: 'Efek, kategori, tampilan, dan API key kembali ke awal. Galeri tidak ikut terhapus.', ok: 'Reset', danger: true })) {
       C = clone(DEF.config); save(); selectFx(null); renderAll(); queueThumbs(); toast('Semua setelan direset');
@@ -1265,6 +1282,7 @@
   });
 
   /* ───────── boot ───────── */
+  if (HOSTED) window.claude.use('downloads').catch(() => null);   // warm up so Save answers within the tap
   renderAll();
   go('studio');
   window.__slash = { get config() { return C; }, state: S }; // handy for debugging in the console
