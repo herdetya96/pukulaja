@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Slash Photo</title>
-<meta name="description" content="100 perintah /slash untuk mengubah foto dengan AI — semua bisa diedit.">
+<meta name="description" content="Editor foto dengan 100 perintah /slash — semua pengaturannya bisa diedit.">
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -19,19 +19,45 @@
 <div id="app">
 
   <!-- ───────────── STUDIO ───────────── -->
-  <section class="view" id="view-studio" data-view="studio">
+  <section class="view studio" id="view-studio" data-view="studio">
     <header class="nav">
       <h1 class="nav-title" data-app-name>Slash Photo</h1>
-      <span class="nav-meta" id="engine-pill"></span>
+      <div class="nav-actions">
+        <button class="nav-btn" id="btn-reset" type="button" hidden>Reset</button>
+        <button class="save-btn" id="btn-save" type="button" hidden>Simpan</button>
+      </div>
     </header>
 
     <div id="stage-error"></div>
     <div id="stage" class="stage"></div>
-    <div id="stage-actions" class="stage-actions"></div>
 
-    <div class="rail" id="filters" role="tablist" aria-label="Kategori"></div>
-    <div class="grid" id="grid"></div>
-    <div class="composer-spacer"></div>
+    <div class="toolbar">
+      <div class="segmented" id="mode-seg" role="group" aria-label="Mode">
+        <button type="button" data-mode="fx" aria-pressed="true">Efek</button>
+        <button type="button" data-mode="adj" aria-pressed="false">Atur</button>
+      </div>
+      <span class="tool-label" id="fx-label"></span>
+    </div>
+
+    <div class="panel" id="panel-fx">
+      <div class="rail" id="filters" role="tablist" aria-label="Kategori"></div>
+      <div class="strip" id="strip"></div>
+      <div class="composer" id="composer">
+        <div class="suggest" id="suggest" hidden></div>
+        <input id="cmd-input" type="text" enterkeyhint="go" placeholder="Ketik / untuk cari efek" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Cari efek dengan perintah">
+        <button class="icon-btn" id="btn-prompt" type="button" aria-label="Lihat dan edit prompt AI" hidden>
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M9 4c-2.2 0-3 1-3 3v2.5c0 1.4-.6 2.5-2 2.5 1.4 0 2 1.1 2 2.5V17c0 2 .8 3 3 3M15 4c2.2 0 3 1 3 3v2.5c0 1.4.6 2.5 2 2.5-1.4 0-2 1.1-2 2.5V17c0 2-.8 3-3 3" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="go-btn" id="btn-go" type="button" aria-label="Buat dengan AI" hidden>
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-adj" hidden>
+      <div class="rail" id="adj-groups" role="tablist" aria-label="Kelompok pengaturan"></div>
+      <div class="adj-list" id="adj-list"></div>
+    </div>
   </section>
 
   <!-- ───────────── EFEK ───────────── -->
@@ -47,7 +73,7 @@
     </header>
     <div class="search">
       <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m16 16 4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      <input id="preset-search" type="search" placeholder="Cari perintah, nama, atau isi prompt" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Cari efek">
+      <input id="preset-search" type="search" placeholder="Cari perintah atau nama" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Cari efek">
     </div>
     <div id="preset-list"></div>
   </section>
@@ -69,21 +95,6 @@
     <div id="settings"></div>
   </section>
 
-  <!-- composer (studio only) -->
-  <div class="composer" id="composer">
-    <div class="suggest" id="suggest" hidden></div>
-    <div class="sel" id="sel" hidden></div>
-    <div class="composer-row">
-      <input id="cmd-input" type="text" enterkeyhint="go" placeholder="Ketik / atau tulis instruksi" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Perintah atau instruksi tambahan">
-      <button class="icon-btn" id="btn-prompt" type="button" aria-label="Lihat dan edit prompt akhir">
-        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M9 4c-2.2 0-3 1-3 3v2.5c0 1.4-.6 2.5-2 2.5 1.4 0 2 1.1 2 2.5V17c0 2 .8 3 3 3M15 4c2.2 0 3 1 3 3v2.5c0 1.4.6 2.5 2 2.5-1.4 0-2 1.1-2 2.5V17c0 2-.8 3-3 3" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <button class="go-btn" id="btn-go" type="button" aria-label="Buat gambar">
-        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-    </div>
-  </div>
-
   <!-- tab bar -->
   <nav class="tabbar" id="tabbar" aria-label="Navigasi utama">
     <button type="button" data-tab="studio" aria-current="page">
@@ -95,7 +106,7 @@
       <span>Efek</span>
     </button>
     <button type="button" data-tab="gallery">
-      <svg viewBox="0 0 24 24" width="25" height="25"><rect x="3.5" y="7" width="14" height="13" rx="2.8" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7 4h10.500a3 3 0 0 1 3 3v10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="m4 17 3.8-3.8 2.7 2.7 2.3-2.3 4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>
+      <svg viewBox="0 0 24 24" width="25" height="25"><rect x="3.5" y="7" width="14" height="13" rx="2.8" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7 4h10.5a3 3 0 0 1 3 3v10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="m4 17 3.8-3.8 2.7 2.7 2.3-2.3 4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg>
       <span>Galeri</span>
     </button>
     <button type="button" data-tab="settings">
@@ -113,6 +124,7 @@
 <input type="file" id="file-import" accept="application/json,.json" hidden>
 
 <script src="presets.js"></script>
+<script src="engine.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

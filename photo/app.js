@@ -1,9 +1,12 @@
-/* Slash Photo — app logic. No build step, no dependencies. */
+/* Slash Photo — app logic. No build step, no dependencies.
+   The editor runs on the device (engine.js). An AI provider is optional and only used by effects marked "AI". */
 (() => {
   'use strict';
 
   const DEF = window.SLASH_DEFAULTS;
+  const FX = window.SlashFX;
   const LS_KEY = 'slashphoto.config.v1';
+  const PREVIEW = 1100;      // longest side of the live preview
   const ASPECTS = ['', '1:1', '4:5', '3:4', '2:3', '9:16', '5:4', '4:3', '3:2', '16:9', '21:9'];
   const ACCENTS = ['#FFD60A', '#FF9F0A', '#FF453A', '#FF375F', '#BF5AF2', '#0A84FF', '#64D2FF', '#30D158', '#FFFFFF'];
 
@@ -24,29 +27,34 @@
   const merge = (base, over) => {
     if (!isObj(over)) return base;
     const out = { ...base };
-    for (const k of Object.keys(over)) {
-      out[k] = isObj(base[k]) && isObj(over[k]) ? merge(base[k], over[k]) : over[k];
-    }
+    for (const k of Object.keys(over)) out[k] = isObj(base[k]) && isObj(over[k]) ? merge(base[k], over[k]) : over[k];
     return out;
   };
   const normCmd = (s) => String(s || '').toLowerCase().replace(/^\/+/, '').replace(/[^a-z0-9_-]/g, '');
   const icon = (d, size = 20, sw = 1.9) =>
     `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   const I = {
-    x: 'M7 7l10 10M17 7 7 17',
-    save: 'M12 4v11M7.5 10.5 12 15l4.5-4.500M5 19h14',
-    share: 'M12 15V4M8 7.5 12 3.500l4 4M6 11H5.500A1.5 1.5 0 0 0 4 12.500v6A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.500v-6a1.5 1.5 0 0 0-1.5-1.500H18',
-    chain: 'M4 12h13M12 6.5 17.5 12 12 17.500M20 5v14',
-    redo: 'M19 5v5h-5M19 10a7.5 7.5 0 1 0 1.3 5',
     up: 'M12 18V6M7 11l5-5 5 5',
     down: 'M12 6v12M7 13l5 5 5-5',
     minus: 'M7 12h10',
     chev: 'm9 6 6 6-6 6',
-    cam: 'M4 8.500A2.5 2.5 0 0 1 6.5 6h1.700l1.3-2h5l1.3 2h1.700A2.5 2.5 0 0 1 20 8.500v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.500zM12 15.500a3 3 0 1 0 0-6 3 3 0 0 0 0 6',
+    cam: 'M4 8.5A2.5 2.5 0 0 1 6.5 6h1.7l1.3-2h5l1.3 2h1.7A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5zM12 15.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6',
     lib: 'M5 5h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM4.5 16l4.5-4.5 3.5 3.5 2.5-2.5 4.5 4.5',
   };
+  const toBlob = (cv, type, q) => new Promise((res, rej) => cv.toBlob((b) => (b ? res(b) : rej(new Error('Gagal membuat file gambar'))), type, q));
 
   /* ───────── config ───────── */
+  /** Bring a stored/imported effect up to the current shape. */
+  function normPreset(p) {
+    const def = DEF.config.presets.find((d) => d.id === p.id);
+    if (p.engine !== 'local' && p.engine !== 'ai') {
+      // saved before the on-device editor existed: adopt the built-in look when there is one
+      p.engine = def ? def.engine : 'ai';
+      p.recipe = def ? clone(def.recipe) : {};
+    }
+    p.recipe = FX.sanitize(p.recipe);
+    return p;
+  }
   let C = load();
   function load() {
     let saved = null;
@@ -54,6 +62,7 @@
     const c = merge(clone(DEF.config), saved);
     if (!Array.isArray(c.categories) || !c.categories.length) c.categories = clone(DEF.config.categories);
     if (!Array.isArray(c.presets)) c.presets = clone(DEF.config.presets);
+    c.presets.forEach(normPreset);
     if (!DEF.providers[c.ai.provider]) c.ai.provider = 'gemini';
     return c;
   }
@@ -63,27 +72,31 @@
   }
   const catById = (id) => C.categories.find((c) => c.id === id) || C.categories[0];
   const presetById = (id) => C.presets.find((p) => p.id === id);
-  const visiblePresets = () => C.presets.filter((p) => !p.hidden);
+  const visiblePresets = () => C.presets.filter((p) => !p.hidden && (C.app.showAi || p.engine !== 'ai'));
 
   /* ───────── session state ───────── */
   const S = {
     tab: 'studio',
-    src: null,          // { blob, url }
-    out: null,          // { blob, url, prompt, cmds }
-    show: 'out',
-    sel: [],            // preset ids, in order
-    override: null,     // manually edited final prompt for the next run
+    src: null,            // { full, prev, thumb } canvases of the working photo
+    undo: null,           // photo before the last AI edit
+    fx: null,             // selected effect id
+    adj: FX.defaults(),   // current editor parameters
+    strength: 100,
+    show: 'out',          // 'out' | 'src' (compare)
+    mode: 'fx',           // 'fx' | 'adj'
+    group: 'fx',          // open group in the Atur panel
     filter: 'all',
-    busy: false,
-    abort: null,
-    timer: null,
-    error: null,
-    query: '',
-    reorder: false,
-    sugIndex: 0,
-    scroll: {},
-    shotUrls: [],
+    override: null,       // manually edited AI prompt for the next run
+    busy: false, abort: null, timer: null, error: null,
+    query: '', reorder: false, sugIndex: 0, scroll: {},
+    thumbs: new Map(), thumbQ: [], shotUrls: [],
   };
+  const view = Object.assign(document.createElement('canvas'), { id: 'view' });
+  const thumbCv = document.createElement('canvas');
+  const curFx = () => (S.fx ? presetById(S.fx) : null);
+  const isAi = () => curFx()?.engine === 'ai';
+  const effective = () => FX.withStrength({ ...FX.defaults(), ...S.adj }, S.strength);
+  const edited = () => Object.keys(FX.compact(S.adj)).length > 0;
 
   /* ───────── appearance ───────── */
   const mqLight = window.matchMedia('(prefers-color-scheme: light)');
@@ -91,14 +104,12 @@
     const root = document.documentElement;
     const theme = C.app.theme === 'auto' ? (mqLight.matches ? 'light' : 'dark') : C.app.theme;
     root.dataset.theme = theme;
-    root.dataset.cols = String(C.app.columns);
     const accent = /^#[0-9a-f]{6}$/i.test(C.app.accent) ? C.app.accent : '#FFD60A';
     root.style.setProperty('--accent', accent);
-    root.style.setProperty('--cols', C.app.columns);
     const [r, g, b] = [1, 3, 5].map((i) => parseInt(accent.slice(i, i + 2), 16));
     const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
     root.style.setProperty('--on-accent', lum > 0.6 ? '#000' : '#fff');
-    // a white accent can't be used as text on a light background — fall back to label colour
+    // a white accent can't be used as text on a light background — fall back to the label colour
     if (theme === 'light' && lum > 0.9) root.style.setProperty('--accent-ink', '#000');
     else if (theme === 'dark' && lum < 0.12) root.style.setProperty('--accent-ink', '#fff');
     else root.style.removeProperty('--accent-ink');
@@ -106,8 +117,6 @@
     const name = C.app.name || 'Slash Photo';
     document.title = name;
     $$('[data-app-name]').forEach((el) => (el.textContent = name));
-    const ai = C.ai;
-    $('#engine-pill').textContent = ai.keys[ai.provider] ? ai[ai.provider].model : 'tanpa API key';
   }
   mqLight.addEventListener('change', applyAppearance);
 
@@ -162,16 +171,25 @@
       setTimeout(() => wrap.remove(), 210);
       onClose?.();
     };
+    const api = { el: wrap, body: $('.sheet-body', wrap), close };
     wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
     $('.l', wrap).addEventListener('click', close);
     if (right) $('.r', wrap).addEventListener('click', () => onRight?.(api));
-    const api = { el: wrap, body: $('.sheet-body', wrap), close };
     $('#layer').append(wrap);
     return api;
   }
 
-  /* ───────── image prep ───────── */
-  async function prepareImage(file) {
+  /* ───────── photo loading ───────── */
+  function scaled(img, w0, h0, max) {
+    const k = Math.min(1, max / Math.max(w0, h0));
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, Math.round(w0 * k)); cv.height = Math.max(1, Math.round(h0 * k));
+    const ctx = cv.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, cv.width, cv.height);
+    return cv;
+  }
+  async function decode(file) {
     let bmp;
     try { bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
     catch {
@@ -182,53 +200,85 @@
         img.src = URL.createObjectURL(file);
       });
     }
-    const w0 = bmp.width || bmp.naturalWidth, h0 = bmp.height || bmp.naturalHeight;
-    const k = Math.min(1, (Number(C.image.maxSide) || 1536) / Math.max(w0, h0));
-    const w = Math.max(1, Math.round(w0 * k)), h = Math.max(1, Math.round(h0 * k));
-    const cv = document.createElement('canvas');
-    cv.width = w; cv.height = h;
-    cv.getContext('2d').drawImage(bmp, 0, 0, w, h);
+    const w = bmp.width || bmp.naturalWidth, h = bmp.height || bmp.naturalHeight;
+    const full = scaled(bmp, w, h, Number(C.image.maxSide) || 2048);
     bmp.close?.();
-    const blob = await new Promise((res) => cv.toBlob(res, 'image/jpeg', Number(C.image.quality) || 0.9));
-    if (!blob) throw new Error('Gagal memproses foto');
-    return blob;
+    return { full, prev: scaled(full, full.width, full.height, PREVIEW), thumb: scaled(full, full.width, full.height, 200) };
   }
-  const blobToDataUrl = (blob) => new Promise((res, rej) => {
-    const fr = new FileReader();
-    fr.onload = () => res(fr.result);
-    fr.onerror = () => rej(new Error('Gagal membaca gambar'));
-    fr.readAsDataURL(blob);
-  });
-  const dataUrlToBlob = async (u) => (await fetch(u)).blob();
-
-  function setSource(blob) {
-    if (S.src) URL.revokeObjectURL(S.src.url);
-    if (S.out) URL.revokeObjectURL(S.out.url);
-    S.src = { blob, url: URL.createObjectURL(blob) };
-    S.out = null; S.error = null; S.show = 'out';
-    renderStage(); renderComposer();
-  }
-  async function onPick(file) {
-    if (!file) return;
-    try { setSource(await prepareImage(file)); }
-    catch (e) { toast(e.message || 'Gagal membuka foto'); }
+  async function setSource(file, { keepUndo = false } = {}) {
+    try {
+      const src = await decode(file);
+      if (!keepUndo) S.undo = null;
+      S.src = src; S.error = null; S.show = 'out';
+      renderStage(); requestDraw(); queueThumbs();
+    } catch (e) { toast(e.message || 'Gagal membuka foto'); }
   }
 
-  /* ───────── prompt building ───────── */
-  const selPresets = () => S.sel.map(presetById).filter(Boolean);
+  /* ───────── live preview ───────── */
+  let raf = 0;
+  function draw() {
+    raf = 0;
+    if (!S.src) return;
+    try { FX.render(S.src.prev, S.show === 'src' ? {} : effective(), view, PREVIEW); }
+    catch (e) { if (S.error !== e.message) { S.error = e.message; renderStage(); } }
+  }
+  function requestDraw() { if (!raf) raf = requestAnimationFrame(draw); }
+
+  /* effect thumbnails rendered from the user's own photo */
+  function queueThumbs(only) {
+    if (!S.src) return;
+    if (only) S.thumbQ.unshift(only);
+    else {
+      S.thumbs.clear();
+      S.thumbs.set('', S.src.thumb.toDataURL('image/jpeg', 0.75));
+      const list = visiblePresets().filter((p) => p.engine === 'local');
+      const inView = (p) => S.filter === 'all' || (S.filter === 'fav' ? p.fav : p.cat === S.filter);
+      S.thumbQ = [...list.filter(inView), ...list.filter((p) => !inView(p))].map((p) => p.id);
+      paintThumb('');
+    }
+    setTimeout(pumpThumbs, 60);
+  }
+  function pumpThumbs() {
+    if (!S.src || !S.thumbQ.length) return;
+    const t0 = performance.now();
+    try {
+      while (S.thumbQ.length && performance.now() - t0 < 28) {
+        const id = S.thumbQ.shift(), p = presetById(id);
+        if (!p || p.engine !== 'local') continue;
+        FX.render(S.src.thumb, p.recipe, thumbCv, 160);
+        S.thumbs.set(id, thumbCv.toDataURL('image/jpeg', 0.72));
+        paintThumb(id);
+      }
+    } catch { S.thumbQ = []; return; }
+    requestDraw();                       // the shared GL canvas was resized for thumbnails
+    if (S.thumbQ.length) setTimeout(pumpThumbs, 40);
+  }
+  function paintThumb(id) {
+    const el = $(`#strip [data-id="${CSS.escape(id)}"] .fx-thumb`);
+    const url = S.thumbs.get(id);
+    if (el && url) { el.style.backgroundImage = `url(${url})`; el.classList.add('has'); }
+  }
+
+  /* ───────── choosing & editing an effect ───────── */
+  function selectFx(id) {
+    const p = id ? presetById(id) : null;
+    S.fx = p ? p.id : null;
+    S.adj = { ...FX.defaults(), ...(p && p.engine === 'local' ? p.recipe : {}) };
+    S.strength = 100; S.override = null; S.show = 'out'; S.error = null;
+    renderStage(); renderStrip(); renderComposer(); renderAdj(); requestDraw();
+  }
+  function resetAll() { selectFx(null); toast('Kembali ke foto asli'); }
+
+  /* ───────── AI (optional) ───────── */
+  const extraText = () => $('#cmd-input').value.replace(/(^|\s)\/\S*$/, '').trim();
   function buildPrompt() {
-    const ps = selPresets();
-    const extra = $('#cmd-input').value.replace(/(^|\s)\/\S*$/, '').trim();
-    let core = '';
-    if (ps.length === 1) core = ps[0].prompt;
-    else if (ps.length > 1) core = 'Apply all of the following edits together in one image:\n' + ps.map((p, i) => `${i + 1}. ${p.prompt}`).join('\n');
+    const p = curFx();
+    const core = p ? p.prompt : '';
+    const extra = extraText();
     return [C.prompt.prefix, core, extra, core || extra ? C.prompt.suffix : ''].map((s) => (s || '').trim()).filter(Boolean).join('\n\n');
   }
   const finalPrompt = () => (S.override != null ? S.override.trim() : buildPrompt());
-  const hasPrompt = () => (S.override != null ? !!S.override.trim() : !!(selPresets().length || $('#cmd-input').value.replace(/(^|\s)\/\S*$/, '').trim()));
-  const pickAspect = () => selPresets().find((p) => p.aspect)?.aspect || C.prompt.aspect || '';
 
-  /* ───────── AI providers ───────── */
   async function httpJson(url, init) {
     let r;
     try { r = await fetch(url, init); }
@@ -246,6 +296,13 @@
     return j ?? {};
   }
   const trimUrl = (u) => String(u || '').trim().replace(/\/+$/, '');
+  const blobToDataUrl = (blob) => new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => res(fr.result);
+    fr.onerror = () => rej(new Error('Gagal membaca gambar'));
+    fr.readAsDataURL(blob);
+  });
+  const dataUrlToBlob = async (u) => (await fetch(u)).blob();
 
   const PROVIDERS = {
     gemini: {
@@ -325,72 +382,96 @@
     },
   };
 
-  /* ───────── generate ───────── */
+  /** Send the photo to the AI provider. The result replaces the working photo, so sliders keep working on top of it. */
   async function generate() {
     if (S.busy) return;
-    if (!S.src) { toast('Pilih foto dulu'); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
-    if (!hasPrompt()) { toast('Pilih efek atau tulis instruksi'); return; }
+    if (!S.src) return toast('Pilih foto dulu');
+    const p = curFx();
+    const prompt = finalPrompt();
+    if (!prompt) return toast('Efek ini belum punya prompt');
     const ai = C.ai, key = (ai.keys[ai.provider] || '').trim();
     if (!key) return noKeySheet();
 
-    const prompt = finalPrompt();
-    const cmds = S.override != null && !S.sel.length ? [] : selPresets().map((p) => p.cmd);
     S.busy = true; S.error = null; S.abort = new AbortController();
     const t0 = Date.now();
     $('#cmd-input').blur(); closeSuggest();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
     renderStage(); renderComposer();
     S.timer = setInterval(() => {
       const el = $('.busy-time');
       if (el) el.textContent = `${Math.round((Date.now() - t0) / 1000)} dtk · ${ai[ai.provider].model}`;
     }, 500);
     try {
-      const blob = await PROVIDERS[ai.provider].edit({ key, cfg: ai[ai.provider], prompt, blob: S.src.blob, aspect: pickAspect(), signal: S.abort.signal });
+      const input = await toBlob(S.src.full, 'image/jpeg', Number(C.image.quality) || 0.92);
+      const blob = await PROVIDERS[ai.provider].edit({ key, cfg: ai[ai.provider], prompt, blob: input, aspect: p?.aspect || C.prompt.aspect || '', signal: S.abort.signal });
       if (!blob || !/^image\//.test(blob.type)) throw new Error('Respons bukan gambar.');
-      if (S.out) URL.revokeObjectURL(S.out.url);
-      S.out = { blob, url: URL.createObjectURL(blob), prompt, cmds };
-      S.show = 'out';
-      if (C.image.autoSave) {
-        try { await DB.add({ id: Date.now() + '-' + uid(), ts: Date.now(), blob, prompt, cmds, model: ai[ai.provider].model }); await DB.trim(Number(C.image.maxHistory) || 60); }
-        catch { toast('Hasil jadi, tapi gagal disimpan ke Galeri'); }
-      }
+      const before = S.src;
+      S.fx = null; S.adj = FX.defaults(); S.strength = 100; S.override = null;
+      await setSource(blob, { keepUndo: true });
+      S.undo = before;
+      if (C.image.autoSave) await addShot({ blob, cmds: p ? [p.cmd] : [], prompt, model: ai[ai.provider].model });
+      toast('Hasil AI jadi foto dasar — lanjut atur di sini');
     } catch (e) {
       if (e.name !== 'AbortError') S.error = e.message || String(e);
     } finally {
       clearInterval(S.timer);
       S.busy = false; S.abort = null;
-      renderStage(); renderComposer();
+      renderStage(); renderStrip(); renderComposer(); renderAdj();
     }
   }
 
   function noKeySheet() {
-    const p = DEF.providers[C.ai.provider];
+    const pv = DEF.providers[C.ai.provider];
     const sh = sheet({
-      title: 'Belum ada API key',
+      title: 'Efek ini butuh AI',
       html: `<div class="group"><div class="group-foot" style="padding-top:0;font-size:15px;color:var(--label)">
-          Untuk membuat gambar langsung di sini, masukkan API key ${esc(p.label)} di Setelan. Key hanya disimpan di perangkat ini dan dikirim langsung ke penyedia AI.
+          Efek bertanda AI mengubah isi foto (sudut kamera, latar, orang), jadi tidak bisa dikerjakan editor di perangkat. Untuk memakainya, isi API key ${esc(pv.label)} di Setelan. Semua efek lain jalan tanpa key.
         </div></div>
         <div class="group"><button class="btn btn-primary" data-a="settings" type="button">Buka Setelan</button></div>
         <div class="group"><button class="btn" data-a="copy" type="button">Salin prompt saja</button>
-          <div class="group-foot">Tanpa key, salin prompt-nya lalu tempel bersama fotomu di aplikasi AI apa pun.</div></div>`,
+          <div class="group-foot">Atau salin prompt-nya dan tempel bersama fotomu di aplikasi AI apa pun.</div></div>
+        <div class="group"><button class="btn" data-a="hide" type="button">Sembunyikan semua efek AI</button></div>`,
     });
     sh.body.addEventListener('click', (e) => {
       const a = e.target.closest('[data-a]')?.dataset.a;
       if (a === 'settings') { sh.close(); go('settings'); }
       if (a === 'copy') { copyText(finalPrompt()); sh.close(); }
+      if (a === 'hide') { C.app.showAi = false; save(); sh.close(); selectFx(null); renderFilters(); toast('Efek AI disembunyikan — nyalakan lagi di Setelan'); }
     });
   }
   async function copyText(t) {
-    try { await navigator.clipboard.writeText(t); toast('Prompt disalin'); }
+    try { await navigator.clipboard.writeText(t); toast('Disalin'); }
     catch {
       const ta = Object.assign(document.createElement('textarea'), { value: t });
       document.body.append(ta); ta.select();
       const ok = document.execCommand('copy'); ta.remove();
-      toast(ok ? 'Prompt disalin' : 'Gagal menyalin');
+      toast(ok ? 'Disalin' : 'Gagal menyalin');
     }
   }
+  function promptSheet() {
+    const ai = C.ai;
+    const sh = sheet({
+      title: 'Prompt AI',
+      left: 'Batal',
+      right: 'Pakai',
+      html: `<div class="group"><div class="list"><div class="row-stack">
+            <textarea class="area mono" id="pf" rows="10" aria-label="Prompt AI" spellcheck="false">${esc(finalPrompt())}</textarea>
+          </div></div>
+          <div class="group-foot">Teks ini dikirim ke <span class="mono">${esc(ai[ai.provider].model)}</span> bersama fotomu. Editan di sini berlaku untuk sekali jalan.</div></div>
+        <div class="btn-grid"><button class="btn" type="button" data-a="copy">Salin</button><button class="btn" type="button" data-a="reset">Reset</button></div>`,
+      onRight: (api) => {
+        const v = $('#pf', api.body).value;
+        S.override = v.trim() === buildPrompt().trim() ? null : v;
+        renderComposer(); api.close();
+      },
+    });
+    sh.body.addEventListener('click', (e) => {
+      const a = e.target.closest('[data-a]')?.dataset.a;
+      if (a === 'copy') copyText($('#pf', sh.body).value);
+      if (a === 'reset') { S.override = null; $('#pf', sh.body).value = buildPrompt(); renderComposer(); }
+    });
+  }
 
-  /* ───────── save / share ───────── */
+  /* ───────── export / share ───────── */
   const fileName = (cmds) => `${(C.app.name || 'slash').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${(cmds?.[0] || 'edit')}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}`;
   const extOf = (blob) => (blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
   function download(blob, name) {
@@ -400,11 +481,55 @@
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   }
-  async function share(blob, name, text) {
+  async function share(blob, name) {
     const file = new File([blob], `${name}.${extOf(blob)}`, { type: blob.type });
     if (navigator.canShare?.({ files: [file] })) {
-      try { await navigator.share({ files: [file], text }); } catch { /* user cancelled */ }
+      try { await navigator.share({ files: [file] }); } catch { /* user cancelled */ }
     } else download(blob, name);
+  }
+  async function addShot(rec) {
+    try {
+      await DB.add({ id: Date.now() + '-' + uid(), ts: Date.now(), ...rec });
+      await DB.trim(Number(C.image.maxHistory) || 60);
+    } catch { toast('Gagal menyimpan ke Galeri'); }
+  }
+
+  /** Render at full resolution and offer the file. */
+  async function exportImage() {
+    if (!S.src || S.busy) return;
+    const btn = $('#btn-save');
+    btn.disabled = true; btn.textContent = 'Memproses…';
+    try {
+      await new Promise((r) => setTimeout(r, 30));          // let the button repaint before the heavy render
+      const cv = document.createElement('canvas');
+      FX.render(S.src.full, effective(), cv, Number(C.image.maxSide) || 2048);
+      const blob = await toBlob(cv, 'image/jpeg', Number(C.image.quality) || 0.92);
+      const w = cv.width, h = cv.height;
+      cv.width = cv.height = 1;                            // free the big canvas early (iOS memory)
+      requestDraw();
+      const p = curFx();
+      const cmds = p ? [p.cmd] : [];
+      if (C.image.autoSave) await addShot({ blob, cmds, model: 'editor' });
+      const url = URL.createObjectURL(blob), name = fileName(cmds);
+      const canShare = !!navigator.canShare?.({ files: [new File([blob], 'a.jpg', { type: blob.type })] });
+      const sh = sheet({
+        title: 'Siap disimpan',
+        html: `<img class="viewer-img" src="${url}" alt="Hasil akhir">
+          <div class="viewer-meta">${w} × ${h} px · ${(blob.size / 1048576).toFixed(1)} MB${C.image.autoSave ? ' · sudah masuk Galeri' : ''}</div>
+          <div class="btn-grid">
+            ${canShare ? '<button class="btn btn-primary" type="button" data-a="share">Simpan / Bagikan</button><button class="btn" type="button" data-a="save">Unduh file</button>'
+              : '<button class="btn btn-primary" type="button" data-a="save" style="grid-column:1/-1">Unduh file</button>'}
+          </div>
+          <div class="group-foot" style="padding:0 4px">Di iPhone: “Simpan / Bagikan” lalu pilih Simpan Gambar, atau tekan lama fotonya.</div>`,
+        onClose: () => setTimeout(() => URL.revokeObjectURL(url), 500),
+      });
+      sh.body.addEventListener('click', (e) => {
+        const a = e.target.closest('[data-a]')?.dataset.a;
+        if (a === 'share') share(blob, name);
+        if (a === 'save') download(blob, name);
+      });
+    } catch (e) { toast(e.message || 'Gagal menyimpan'); }
+    finally { btn.disabled = false; btn.textContent = 'Simpan'; }
   }
 
   /* ───────── gallery DB ───────── */
@@ -445,37 +570,41 @@
       st.innerHTML = `<div class="empty">
         <div class="empty-mark" aria-hidden="true">/</div>
         <h2>Mulai dari satu foto</h2>
-        <p>Lalu pilih perintah di bawah — atau ketik sendiri.</p>
+        <p>Pilih efek, lalu atur sendiri tiap detailnya.</p>
         <div class="empty-btns">
           <button class="btn btn-primary" type="button" data-a="lib">${icon(I.lib)} Pilih dari Galeri</button>
           <button class="btn" type="button" data-a="cam">${icon(I.cam)} Ambil Foto</button>
         </div>
       </div>`;
     } else {
-      const showOut = S.out && S.show === 'out';
-      st.innerHTML = `<img src="${showOut ? S.out.url : S.src.url}" alt="${showOut ? 'Hasil edit' : 'Foto sumber'}" draggable="false">
-        ${S.out ? `<div class="seg-ba" role="group" aria-label="Bandingkan">
-            <button type="button" data-a="show-src" aria-pressed="${!showOut}">Sebelum</button>
-            <button type="button" data-a="show-out" aria-pressed="${showOut}">Sesudah</button></div>` : ''}
+      const showOut = S.show === 'out';
+      st.innerHTML = '';
+      st.append(view);
+      st.insertAdjacentHTML('beforeend', `
+        ${edited() && !S.busy ? `<div class="seg-ba" role="group" aria-label="Bandingkan">
+            <button type="button" data-a="show-src" aria-pressed="${!showOut}">Asli</button>
+            <button type="button" data-a="show-out" aria-pressed="${showOut}">Hasil</button></div>` : ''}
         ${S.busy ? '' : `<button class="stage-chip right" type="button" data-a="change">Ganti foto</button>`}
+        ${S.undo && !S.busy ? '<button class="stage-chip left-b" type="button" data-a="undo">Urungkan AI</button>' : ''}
+        ${isAi() && !S.busy ? '<div class="stage-hint">Efek AI — tekan ↑ di bawah untuk membuat</div>' : ''}
         ${S.busy ? `<div class="busy" role="status">
-            <div class="busy-cmd">${esc(selPresets().map((p) => '/' + p.cmd).join(' ') || 'Instruksi kustom')}</div>
+            <div class="busy-cmd">${esc(curFx() ? '/' + curFx().cmd : 'AI')}</div>
             <div class="busy-time">0 dtk · ${esc(C.ai[C.ai.provider].model)}</div>
-            <button class="btn btn-sm" type="button" data-a="cancel">Batal</button></div>` : ''}`;
+            <button class="btn btn-sm" type="button" data-a="cancel">Batal</button></div>` : ''}`);
     }
-    $('#stage-actions').innerHTML = S.out && !S.busy ? `
-      <button class="act" type="button" data-a="save">${icon(I.save, 22)}Simpan</button>
-      <button class="act" type="button" data-a="share">${icon(I.share, 22)}Bagikan</button>
-      <button class="act" type="button" data-a="chain">${icon(I.chain, 22)}Lanjut edit</button>
-      <button class="act" type="button" data-a="redo">${icon(I.redo, 22)}Ulangi</button>` : '';
+    $('#btn-save').hidden = !S.src;
+    $('#btn-reset').hidden = !S.src || (!edited() && !S.fx);
     const keyIssue = S.error && /\b(401|403)\b|api.?key|unauth|permission/i.test(S.error);
     const modelIssue = S.error && /\b404\b|not found|model/i.test(S.error);
     $('#stage-error').innerHTML = S.error ? `<div class="error" role="alert">
-      <div><b>Gagal membuat gambar</b></div><div class="error-msg">${esc(S.error)}</div>
+      <div class="error-msg"><b>Gagal.</b> ${esc(S.error)}</div>
       <div class="error-row">
-        <button class="btn btn-sm" type="button" data-a="redo">Coba lagi</button>
+        ${isAi() ? '<button class="btn btn-sm" type="button" data-a="retry">Coba lagi</button>' : ''}
         ${keyIssue || modelIssue ? '<button class="btn btn-sm" type="button" data-a="open-settings">Cek Setelan</button>' : ''}
+        <button class="btn btn-sm" type="button" data-a="dismiss">Tutup</button>
       </div></div>` : '';
+    const p = curFx();
+    $('#fx-label').innerHTML = p ? `<span class="mono">/${esc(p.cmd)}</span>${S.strength < 100 ? ` · ${S.strength}%` : ''}` : (edited() ? 'Editan sendiri' : '');
   }
 
   function renderFilters() {
@@ -490,101 +619,123 @@
     if (!pills.some(([id]) => id === S.filter)) S.filter = 'all';
     $('#filters').innerHTML = pills.map(([id, label, n]) =>
       `<button class="pill" type="button" role="tab" aria-selected="${S.filter === id}" data-f="${esc(id)}">${esc(label)} <small>${n}</small></button>`).join('');
+    renderStrip();
   }
 
-  function renderGrid() {
+  function renderStrip() {
     let list = visiblePresets();
     if (S.filter === 'fav') list = list.filter((p) => p.fav);
     else if (S.filter !== 'all') list = list.filter((p) => p.cat === S.filter);
-    $('#grid').innerHTML = list.length ? list.map((p) => {
+    const tile = (id, label, emoji, ai, color) => {
+      const url = S.thumbs.get(id);
+      return `<button class="fx" type="button" data-id="${esc(id)}" aria-pressed="${(S.fx || '') === id}">
+        <span class="fx-thumb ${url ? 'has' : ''}" style="${url ? `background-image:url(${url});` : ''}--c:${esc(color)}">
+          <span class="fx-emoji" aria-hidden="true">${esc(emoji)}</span>${ai ? '<span class="fx-ai">AI</span>' : ''}</span>
+        <span class="fx-cmd">${esc(label)}</span></button>`;
+    };
+    $('#strip').innerHTML = tile('', 'Asli', '○', false, '#8E8E93') + list.map((p) => {
       const c = catById(p.cat);
-      const n = S.sel.indexOf(p.id);
-      return `<button class="tile" type="button" data-id="${esc(p.id)}" aria-pressed="${n >= 0}">
-        <span class="tile-top"><span class="tile-emoji" aria-hidden="true">${esc(c.emoji)}</span>
-          ${n >= 0 ? `<span class="tile-badge">${S.sel.length > 1 ? n + 1 : '✓'}</span>` : p.fav ? '<span class="tile-fav" aria-label="Favorit">★</span>' : `<span class="tile-dot" style="background:${esc(c.color)}"></span>`}</span>
-        <span class="tile-cmd">/${esc(p.cmd)}</span>
-        <span class="tile-name">${esc(p.name)}</span>
-        <span class="tile-desc">${esc(p.prompt)}</span>
-      </button>`;
-    }).join('') : '<div class="grid-empty">Belum ada efek di sini. Tambahkan dari tab Efek.</div>';
+      return tile(p.id, '/' + p.cmd, c.emoji, p.engine === 'ai', c.color);
+    }).join('');
   }
 
   function renderComposer() {
-    S.sel = S.sel.filter((id) => { const p = presetById(id); return p && !p.hidden; });
-    const ps = selPresets();
-    const sel = $('#sel');
-    sel.hidden = !ps.length && S.override == null;
-    sel.innerHTML = ps.map((p) => `<button class="sel-chip" type="button" data-rm="${esc(p.id)}" aria-label="Hapus /${esc(p.cmd)}">/${esc(p.cmd)}${icon(I.x, 15, 2.4)}</button>`).join('')
-      + (S.override != null ? '<button class="sel-chip" type="button" data-rm="override" aria-label="Buang prompt manual">prompt manual' + icon(I.x, 15, 2.4) + '</button>' : '')
-      + (ps.length > 1 ? `<span class="sel-note">${ps.length}/${C.prompt.maxStack} digabung</span>` : '');
-    $('#btn-go').setAttribute('aria-disabled', String(S.busy || !S.src || !hasPrompt()));
+    const ai = isAi();
+    $('#btn-go').hidden = $('#btn-prompt').hidden = !ai;
+    $('#btn-go').setAttribute('aria-disabled', String(S.busy || !S.src));
     $('#btn-prompt').classList.toggle('on', S.override != null);
+    $('#cmd-input').placeholder = ai ? 'Instruksi tambahan (opsional)' : 'Ketik / untuk cari efek';
   }
 
-  function toggleSel(id) {
-    const i = S.sel.indexOf(id);
-    if (i >= 0) S.sel.splice(i, 1);
-    else {
-      const max = Math.max(1, Number(C.prompt.maxStack) || 1);
-      if (max === 1) S.sel = [id];
-      else if (S.sel.length >= max) return toast(`Maksimal ${max} efek sekaligus — ubah di Setelan`);
-      else S.sel.push(id);
-    }
-    S.override = null;
-    renderGrid(); renderComposer();
+  function setMode(mode) {
+    S.mode = mode;
+    $$('#mode-seg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+    $('#panel-fx').hidden = mode !== 'fx';
+    $('#panel-adj').hidden = mode !== 'adj';
+    if (mode === 'adj') renderAdj();
   }
+
+  /* slider panel */
+  const groupDirty = (g) => FX.PARAMS.some((p) => p.g === g && S.adj[p.k] !== p.d);
+  function renderAdj() {
+    if (S.mode !== 'adj') return;
+    const groups = [['fx', 'Kekuatan'], ...FX.GROUPS.map(([id, name]) => ['g:' + id, name])];
+    $('#adj-groups').innerHTML = groups.map(([id, name]) =>
+      `<button class="pill" type="button" role="tab" aria-selected="${S.group === id}" data-g="${id}">${esc(name)}${id !== 'fx' && groupDirty(id.slice(2)) ? '<i class="dot"></i>' : ''}</button>`).join('');
+    const list = $('#adj-list');
+    if (S.group === 'fx') {
+      const p = curFx();
+      const local = p && p.engine === 'local';
+      list.innerHTML = `
+        <label class="adj"><span class="adj-l">Kekuatan</span><input type="range" min="0" max="100" step="1" value="${S.strength}" data-strength aria-label="Kekuatan efek"><span class="adj-v">${S.strength}</span></label>
+        <div class="adj-actions">
+          ${local ? `<button class="btn btn-sm" type="button" data-a="save-fx">Simpan ke <span class="mono">/${esc(p.cmd)}</span></button>` : ''}
+          <button class="btn btn-sm" type="button" data-a="save-new">Simpan sebagai efek baru</button>
+          ${local ? '<button class="btn btn-sm" type="button" data-a="revert">Kembali ke setelan efek</button>' : ''}
+        </div>
+        <p class="adj-note">${p ? (local ? 'Geser tab di atas untuk mengatur tiap detail efek ini. Perubahan baru tersimpan ke efek kalau kamu menekan “Simpan ke”.' : 'Ini efek AI. Setelah hasilnya jadi, kamu bisa lanjut mengaturnya dengan slider.') : 'Belum ada efek dipilih — kamu tetap bisa mengatur foto dari nol lewat tab di atas.'}</p>`;
+      return;
+    }
+    const g = S.group.slice(2);
+    list.innerHTML = FX.PARAMS.filter((p) => p.g === g).map((p) => {
+      const v = S.adj[p.k];
+      if (p.t === 'range') return `<label class="adj"><span class="adj-l">${esc(p.l)}</span><input type="range" min="${p.min}" max="${p.max}" step="1" value="${v}" data-k="${p.k}" aria-label="${esc(p.l)}"><button class="adj-v ${v !== p.d ? 'on' : ''}" type="button" data-zero="${p.k}" aria-label="Reset ${esc(p.l)}">${Math.round(v)}</button></label>`;
+      if (p.t === 'color') return `<label class="adj"><span class="adj-l">${esc(p.l)}</span><span class="adj-fill"></span><input type="color" value="${esc(v)}" data-k="${p.k}" aria-label="${esc(p.l)}"></label>`;
+      if (p.t === 'select') return `<label class="adj"><span class="adj-l">${esc(p.l)}</span><select data-k="${p.k}" aria-label="${esc(p.l)}">${p.opts.map(([o, t]) => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`;
+      if (p.t === 'bool') return `<label class="adj"><span class="adj-l">${esc(p.l)}</span><span class="switch"><input type="checkbox" data-k="${p.k}" ${v ? 'checked' : ''}><i></i></span></label>`;
+      return `<label class="adj"><span class="adj-l">${esc(p.l)}</span><input type="text" value="${esc(v)}" data-k="${p.k}" placeholder="—" aria-label="${esc(p.l)}" autocapitalize="off" autocorrect="off" spellcheck="false"></label>`;
+    }).join('');
+  }
+  function onAdjInput(e) {
+    const el = e.target;
+    if (el.hasAttribute('data-strength')) {
+      S.strength = Number(el.value);
+      el.nextElementSibling.textContent = S.strength;
+    } else if (el.dataset.k) {
+      const p = FX.BY_KEY[el.dataset.k];
+      S.adj[p.k] = p.t === 'range' ? Number(el.value) : p.t === 'bool' ? el.checked : el.value;
+      if (p.t === 'range') { const v = el.nextElementSibling; v.textContent = el.value; v.classList.toggle('on', S.adj[p.k] !== p.d); }
+    } else return;
+    if (S.show !== 'out') S.show = 'out';
+    requestDraw();
+  }
+  /** What the current sliders amount to as a stored recipe (strength baked in). */
+  const currentRecipe = () => {
+    const e = effective();
+    for (const p of FX.PARAMS) if (p.t === 'range') e[p.k] = Math.round(e[p.k]);
+    return FX.compact(e);
+  };
 
   /* slash autocomplete */
-  function currentToken() { return $('#cmd-input').value.match(/(?:^|\s)\/(\S*)$/)?.[1]; }
+  const currentToken = () => $('#cmd-input').value.match(/(?:^|\s)\/(\S*)$/)?.[1];
   function renderSuggest() {
     const tok = currentToken();
     const box = $('#suggest');
     if (tok == null) return closeSuggest();
     const q = normCmd(tok);
-    const pool = visiblePresets().filter((p) => !S.sel.includes(p.id));
-    const hits = [...pool.filter((p) => p.cmd.startsWith(q)), ...pool.filter((p) => !p.cmd.startsWith(q) && (p.cmd.includes(q) || p.name.toLowerCase().includes(q)))].slice(0, 6);
+    const pool = visiblePresets();
+    const hits = [...pool.filter((p) => p.cmd.startsWith(q)), ...pool.filter((p) => !p.cmd.startsWith(q) && (p.cmd.includes(q) || p.name.toLowerCase().includes(q)))].slice(0, 5);
     if (!hits.length) return closeSuggest();
     S.sugIndex = Math.min(S.sugIndex, hits.length - 1);
     box.hidden = false;
-    box.innerHTML = hits.map((p, i) => `<button type="button" data-id="${esc(p.id)}" class="${i === S.sugIndex ? 'active' : ''}"><span class="s-cmd">/${esc(p.cmd)}</span><span class="s-name">${esc(p.name)}</span></button>`).join('');
+    box.innerHTML = hits.map((p, i) => `<button type="button" data-id="${esc(p.id)}" class="${i === S.sugIndex ? 'active' : ''}"><span class="s-cmd">/${esc(p.cmd)}</span><span class="s-name">${esc(p.name)}${p.engine === 'ai' ? ' · AI' : ''}</span></button>`).join('');
   }
   function closeSuggest() { $('#suggest').hidden = true; S.sugIndex = 0; }
   function acceptSuggest(id) {
     const inp = $('#cmd-input');
-    inp.value = inp.value.replace(/(^|\s)\/\S*$/, '$1');
+    inp.value = inp.value.replace(/(^|\s)\/\S*$/, '$1').trimEnd();
     closeSuggest();
-    if (!S.sel.includes(id)) toggleSel(id);
-    inp.focus();
-  }
-
-  function promptSheet() {
-    const ai = C.ai;
-    const sh = sheet({
-      title: 'Prompt akhir',
-      left: 'Batal',
-      right: 'Pakai',
-      html: `<div class="group"><div class="list"><div class="row-stack">
-            <textarea class="area mono" id="pf" rows="11" aria-label="Prompt akhir" spellcheck="false">${esc(finalPrompt())}</textarea>
-          </div></div>
-          <div class="group-foot">Ini teks yang dikirim ke <span class="mono">${esc(ai[ai.provider].model)}</span> bersama fotomu. Edit sesukamu — berlaku untuk generate berikutnya saja.</div></div>
-        <div class="btn-grid"><button class="btn" type="button" data-a="copy">Salin</button><button class="btn" type="button" data-a="reset">Reset</button></div>`,
-      onRight: (api) => {
-        const v = $('#pf', api.body).value;
-        S.override = v.trim() === buildPrompt().trim() ? null : v;
-        renderComposer(); api.close();
-      },
-    });
-    sh.body.addEventListener('click', (e) => {
-      const a = e.target.closest('[data-a]')?.dataset.a;
-      if (a === 'copy') copyText($('#pf', sh.body).value);
-      if (a === 'reset') { S.override = null; $('#pf', sh.body).value = buildPrompt(); renderComposer(); }
-    });
+    const p = presetById(id);
+    if (p && S.filter !== 'all' && S.filter !== p.cat) { S.filter = 'all'; renderFilters(); }
+    selectFx(id);
+    inp.blur();
+    $(`#strip [data-id="${CSS.escape(id)}"]`)?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
   }
 
   /* ───────── EFEK tab ───────── */
   function renderPresetList() {
     const q = S.query.trim().toLowerCase();
-    const match = (p) => !q || p.cmd.includes(normCmd(q) || '\u0000') || p.name.toLowerCase().includes(q) || p.prompt.toLowerCase().includes(q);
+    const match = (p) => !q || p.cmd.includes(normCmd(q) || '\u0000') || p.name.toLowerCase().includes(q);
     let html = '';
     for (const c of C.categories) {
       const all = C.presets.filter((p) => p.cat === c.id);
@@ -593,11 +744,12 @@
       html += `<div class="group"><div class="group-head"><span>${esc(c.emoji)} ${esc(c.name)} · ${all.length}</span></div>
         <div class="list">${list.length ? list.map((p) => {
           const i = all.indexOf(p);
+          const n = Object.keys(p.recipe || {}).length;
           return `<div class="row p-row ${p.hidden ? 'is-hidden' : ''}">
             <button class="p-emoji" type="button" data-edit="${esc(p.id)}" style="background:color-mix(in srgb, ${esc(c.color)} 22%, transparent)" tabindex="-1" aria-hidden="true">${esc(c.emoji)}</button>
             <button class="p-main" type="button" data-edit="${esc(p.id)}" style="text-align:left">
-              <span class="p-cmd">/${esc(p.cmd)}</span><span class="p-sub">${esc(p.name)} — ${esc(p.prompt)}</span></button>
-            ${p.hidden ? '<span class="tag">Tersembunyi</span>' : ''}
+              <span class="p-cmd">/${esc(p.cmd)}</span><span class="p-sub">${esc(p.name)} · ${p.engine === 'ai' ? 'butuh AI' : `${n} pengaturan`}</span></button>
+            ${p.engine === 'ai' ? '<span class="tag tag-ai">AI</span>' : ''}${p.hidden ? '<span class="tag">Tersembunyi</span>' : ''}
             ${S.reorder ? `<span class="p-tools">
                 <button type="button" data-mv="-1" data-id="${esc(p.id)}" ${i === 0 ? 'disabled' : ''} aria-label="Naikkan">${icon(I.up, 19)}</button>
                 <button type="button" data-mv="1" data-id="${esc(p.id)}" ${i === all.length - 1 ? 'disabled' : ''} aria-label="Turunkan">${icon(I.down, 19)}</button>
@@ -607,21 +759,25 @@
         }).join('') : '<div class="row" style="color:var(--label-2)">Kategori ini masih kosong</div>'}</div></div>`;
     }
     if (!html) html = `<div class="blank" style="padding-top:8vh"><h2>Tidak ketemu</h2><p>Tidak ada efek yang cocok dengan “${esc(S.query)}”.</p></div>`;
-    else if (!q) html += `<div class="group"><div class="list">
+    else if (!q) {
+      const local = C.presets.filter((p) => p.engine === 'local').length;
+      html += `<div class="group"><div class="list">
         <button class="row row-btn" type="button" id="btn-cats">Kelola kategori<span class="row-value">${C.categories.length}</span>${icon(I.chev, 16)}</button>
-      </div><div class="group-foot">${C.presets.length} efek. Ketuk untuk mengedit perintah, nama, prompt, kategori, dan rasio.</div></div>`;
+      </div><div class="group-foot">${local} efek jalan di perangkat, ${C.presets.length - local} butuh AI. Ketuk efek untuk mengedit perintah, nama, kategori, dan pengaturannya.</div></div>`;
+    }
     $('#preset-list').innerHTML = html;
     $('#btn-reorder').textContent = S.reorder ? 'Selesai' : 'Atur';
   }
 
   const aspectOptions = (val, autoLabel) => ASPECTS.map((a) => `<option value="${a}" ${a === val ? 'selected' : ''}>${a || autoLabel}</option>`).join('');
 
-  function presetSheet(id) {
+  /** Edit an effect. Pass `draft` to create a new one pre-filled (e.g. from the current sliders). */
+  function presetSheet(id, draft) {
     const isNew = !id;
-    const p = isNew ? { id: uid(), cmd: '', name: '', prompt: '', cat: S.filter !== 'all' && S.filter !== 'fav' ? S.filter : C.categories[0].id, aspect: '', fav: false, hidden: false } : presetById(id);
+    const p = isNew ? { id: uid(), cmd: '', name: '', prompt: '', cat: !['all', 'fav'].includes(S.filter) ? S.filter : C.categories[0].id, engine: 'local', recipe: {}, aspect: '', fav: false, hidden: false, ...draft } : presetById(id);
     if (!p) return;
     const orig = DEF.config.presets.find((d) => d.id === p.id);
-    const changed = orig && ['cmd', 'name', 'prompt', 'cat', 'aspect'].some((k) => orig[k] !== p[k]);
+    const changed = orig && (['cmd', 'name', 'prompt', 'cat', 'aspect', 'engine'].some((k) => orig[k] !== p[k]) || JSON.stringify(orig.recipe) !== JSON.stringify(p.recipe));
     const sh = sheet({
       title: isNew ? 'Efek baru' : '/' + p.cmd,
       left: 'Batal',
@@ -630,11 +786,17 @@
           <label class="row"><span class="row-label">Perintah</span><input class="mono" type="text" id="f-cmd" value="${esc(p.cmd ? '/' + p.cmd : '')}" placeholder="/namaefek" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
           <label class="row"><span class="row-label">Nama</span><input type="text" id="f-name" value="${esc(p.name)}" placeholder="Nama tampilan"></label>
           <label class="row"><span class="row-label">Kategori</span><select id="f-cat">${C.categories.map((c) => `<option value="${esc(c.id)}" ${c.id === p.cat ? 'selected' : ''}>${esc(c.emoji)} ${esc(c.name)}</option>`).join('')}</select></label>
-          <label class="row"><span class="row-label">Rasio hasil</span><select id="f-aspect">${aspectOptions(p.aspect, 'Ikuti setelan')}</select></label>
+          <label class="row"><span class="row-label">Dikerjakan oleh</span><select id="f-engine"><option value="local" ${p.engine === 'local' ? 'selected' : ''}>Editor di perangkat</option><option value="ai" ${p.engine === 'ai' ? 'selected' : ''}>AI (butuh API key)</option></select></label>
         </div></div>
-        <div class="group"><div class="group-head"><span>Prompt</span></div><div class="list"><div class="row-stack">
-          <textarea class="area" id="f-prompt" rows="6" placeholder="Jelaskan perubahan yang diminta ke AI. Bahasa Inggris biasanya paling akurat." aria-label="Prompt">${esc(p.prompt)}</textarea>
-        </div></div></div>
+        <div class="group" id="g-local"><div class="group-head"><span>Pengaturan editan</span></div><div class="list">
+            <button class="row row-btn" type="button" data-a="tune">Atur dengan slider di Studio${icon(I.chev, 16)}</button>
+            <div class="row-stack"><span>Atau edit langsung (JSON)</span>
+              <textarea class="area mono" id="f-recipe" rows="6" aria-label="Pengaturan dalam JSON" spellcheck="false" autocapitalize="off" autocorrect="off">${esc(JSON.stringify(p.recipe || {}, null, 1))}</textarea></div>
+          </div><div class="group-foot">Tiap angka di sini adalah satu slider di tab Atur. Yang tidak ditulis berarti netral.</div></div>
+        <div class="group" id="g-ai"><div class="group-head"><span>Prompt AI</span></div><div class="list"><div class="row-stack">
+            <textarea class="area" id="f-prompt" rows="5" placeholder="Jelaskan perubahan yang diminta ke AI. Bahasa Inggris biasanya paling akurat." aria-label="Prompt AI">${esc(p.prompt)}</textarea></div>
+            <label class="row"><span class="row-label">Rasio hasil</span><select id="f-aspect">${aspectOptions(p.aspect, 'Ikuti setelan')}</select></label>
+          </div></div>
         <div class="group"><div class="list">
           <label class="row"><span class="row-label">Favorit</span><span class="switch"><input type="checkbox" id="f-fav" ${p.fav ? 'checked' : ''}><i></i></span></label>
           <label class="row"><span class="row-label">Sembunyikan dari Studio</span><span class="switch"><input type="checkbox" id="f-hidden" ${p.hidden ? 'checked' : ''}><i></i></span></label>
@@ -644,45 +806,62 @@
           ${changed ? '<button class="row row-btn" type="button" data-a="restore">Kembalikan ke bawaan</button>' : ''}
           <button class="row row-btn danger" type="button" data-a="del">Hapus efek</button>
         </div></div>`}`,
-      onRight: (api) => {
-        const cmd = normCmd($('#f-cmd', api.body).value);
-        const prompt = $('#f-prompt', api.body).value.trim();
-        if (!cmd) return toast('Perintah wajib diisi (huruf/angka tanpa spasi)');
-        if (!prompt) return toast('Prompt wajib diisi');
-        if (C.presets.some((x) => x.cmd === cmd && x.id !== p.id)) return toast(`/${cmd} sudah dipakai efek lain`);
-        Object.assign(p, {
-          cmd, prompt,
-          name: $('#f-name', api.body).value.trim() || cmd,
-          cat: $('#f-cat', api.body).value,
-          aspect: $('#f-aspect', api.body).value,
-          fav: $('#f-fav', api.body).checked,
-          hidden: $('#f-hidden', api.body).checked,
-        });
-        if (isNew) C.presets.push(p);
-        save(); renderAllPresets(); api.close();
-        toast(isNew ? `/${cmd} ditambahkan` : 'Tersimpan');
-      },
+      onRight: (api) => { if (commit()) { api.close(); toast(isNew ? `/${p.cmd} ditambahkan` : 'Tersimpan'); } },
     });
-    sh.body.addEventListener('click', async (e) => {
+    const b = sh.body;
+    const syncEngine = () => { $('#g-local', b).hidden = $('#f-engine', b).value !== 'local'; };
+    $('#f-engine', b).addEventListener('change', syncEngine);
+    syncEngine();
+    function commit() {
+      const cmd = normCmd($('#f-cmd', b).value);
+      const engine = $('#f-engine', b).value;
+      const prompt = $('#f-prompt', b).value.trim();
+      if (!cmd) return toast('Perintah wajib diisi (huruf/angka tanpa spasi)'), false;
+      if (C.presets.some((x) => x.cmd === cmd && x.id !== p.id)) return toast(`/${cmd} sudah dipakai efek lain`), false;
+      if (engine === 'ai' && !prompt) return toast('Efek AI wajib punya prompt'), false;
+      let recipe;
+      try { recipe = FX.sanitize(JSON.parse($('#f-recipe', b).value || '{}')); }
+      catch { return toast('JSON pengaturan tidak valid'), false; }
+      Object.assign(p, {
+        cmd, prompt, engine, recipe,
+        name: $('#f-name', b).value.trim() || cmd,
+        cat: $('#f-cat', b).value,
+        aspect: $('#f-aspect', b).value,
+        fav: $('#f-fav', b).checked,
+        hidden: $('#f-hidden', b).checked,
+      });
+      if (isNew && !C.presets.includes(p)) C.presets.push(p);
+      save(); renderAllPresets(); queueThumbs(p.id);
+      if (S.fx === p.id) selectFx(p.id);
+      return true;
+    }
+    b.addEventListener('click', async (e) => {
       const a = e.target.closest('[data-a]')?.dataset.a;
+      if (a === 'tune') {
+        if (!commit()) return;
+        sh.close(); go('studio'); selectFx(p.id); S.group = 'g:light'; setMode('adj');
+        if (!S.src) toast('Pilih foto dulu untuk melihat hasilnya');
+      }
       if (a === 'dup') {
         let cmd = p.cmd + '2', n = 2;
         while (C.presets.some((x) => x.cmd === cmd)) cmd = p.cmd + ++n;
         const copy = { ...clone(p), id: uid(), cmd, name: p.name + ' (salinan)', builtin: false };
         C.presets.splice(C.presets.indexOf(p) + 1, 0, copy);
-        save(); renderAllPresets(); sh.close(); presetSheet(copy.id);
+        save(); renderAllPresets(); queueThumbs(copy.id); sh.close(); presetSheet(copy.id);
       }
       if (a === 'restore') {
         Object.assign(p, clone(orig), { fav: p.fav, hidden: p.hidden });
-        save(); renderAllPresets(); sh.close(); toast('Dikembalikan ke bawaan');
+        save(); renderAllPresets(); queueThumbs(p.id); sh.close(); toast('Dikembalikan ke bawaan');
+        if (S.fx === p.id) selectFx(p.id);
       }
       if (a === 'del' && await confirmDelete(p)) sh.close();
     });
-    if (isNew) setTimeout(() => $('#f-cmd', sh.body)?.focus(), 350);
+    if (isNew) setTimeout(() => $('#f-cmd', b)?.focus(), 350);
   }
   async function confirmDelete(p) {
     if (!(await ask({ title: `Hapus /${p.cmd}?`, text: 'Efek ini dihapus dari daftar. Efek bawaan bisa dipulihkan lewat Setelan → Reset efek.', ok: 'Hapus', danger: true }))) return false;
     C.presets = C.presets.filter((x) => x.id !== p.id);
+    if (S.fx === p.id) S.fx = null;
     save(); renderAllPresets();
     return true;
   }
@@ -695,7 +874,7 @@
     [C.presets[i], C.presets[j]] = [C.presets[j], C.presets[i]];
     save(); renderAllPresets();
   }
-  function renderAllPresets() { renderFilters(); renderGrid(); renderComposer(); renderPresetList(); }
+  function renderAllPresets() { renderFilters(); renderComposer(); renderPresetList(); renderStage(); }
 
   function categorySheet() {
     const draw = () => `<div class="group"><div class="list">${C.categories.map((c, i) => `<div class="row cat-row" data-cid="${esc(c.id)}">
@@ -754,7 +933,7 @@
     $('#gallery').innerHTML = shots.length
       ? `<div class="shots">${shots.map((s, i) => `<button class="shot" type="button" data-shot="${esc(s.id)}" aria-label="Buka hasil ${i + 1}">
           <img src="${S.shotUrls[i]}" alt="" loading="lazy">${s.cmds?.length ? `<span>/${esc(s.cmds.join(' /'))}</span>` : ''}</button>`).join('')}</div>`
-      : `<div class="blank"><h2>Belum ada hasil</h2><p>${C.image.autoSave ? 'Setiap gambar yang kamu buat di Studio otomatis muncul di sini.' : 'Simpan otomatis sedang mati. Nyalakan di Setelan untuk mengisi galeri.'}</p></div>`;
+      : `<div class="blank"><h2>Belum ada hasil</h2><p>${C.image.autoSave ? 'Setiap foto yang kamu simpan dari Studio otomatis muncul di sini.' : 'Simpan otomatis sedang mati. Nyalakan di Setelan untuk mengisi galeri.'}</p></div>`;
     $('#gallery').onclick = (e) => {
       const id = e.target.closest('[data-shot]')?.dataset.shot;
       const i = shots.findIndex((s) => s.id === id);
@@ -767,43 +946,45 @@
     const sh = sheet({
       title: s.cmds?.length ? '/' + s.cmds.join(' /') : 'Hasil',
       html: `<img class="viewer-img" src="${url}" alt="Hasil edit">
-        <div class="viewer-meta">${esc(when)} · <span class="mono">${esc(s.model || '')}</span></div>
+        <div class="viewer-meta">${esc(when)}${s.model && s.model !== 'editor' ? ` · <span class="mono">${esc(s.model)}</span>` : ''}</div>
         <div class="btn-grid">
-          <button class="btn btn-primary" type="button" data-a="save">Simpan</button>
-          <button class="btn" type="button" data-a="share">Bagikan</button>
+          <button class="btn btn-primary" type="button" data-a="share">Simpan / Bagikan</button>
+          <button class="btn" type="button" data-a="save">Unduh file</button>
           <button class="btn" type="button" data-a="use">Edit lagi</button>
           <button class="btn btn-danger" type="button" data-a="del">Hapus</button>
         </div>
-        <div class="group"><div class="group-head"><span>Prompt</span><button type="button" data-a="copy">Salin</button></div>
-          <div class="list"><div class="kv">${esc(s.prompt || '')}</div></div></div>`,
+        ${s.prompt ? `<div class="group"><div class="group-head"><span>Prompt AI</span><button type="button" data-a="copy">Salin</button></div>
+          <div class="list"><div class="kv">${esc(s.prompt)}</div></div></div>` : ''}`,
     });
     sh.body.addEventListener('click', async (e) => {
       const a = e.target.closest('[data-a]')?.dataset.a;
       if (a === 'save') download(s.blob, name);
       if (a === 'share') share(s.blob, name);
       if (a === 'copy') copyText(s.prompt || '');
-      if (a === 'use') { setSource(s.blob); sh.close(); go('studio'); }
+      if (a === 'use') { sh.close(); go('studio'); selectFx(null); setSource(s.blob); }
       if (a === 'del' && await ask({ title: 'Hapus hasil ini?', ok: 'Hapus', danger: true })) { await DB.del(s.id); sh.close(); renderGallery(); }
     });
   }
 
   /* ───────── SETELAN ───────── */
+  const fmtVal = (v, fmt) => (fmt === 'pct' ? Math.round(v * 100) + '%' : String(v));
   const R = {
     text: (label, path, o = {}) => `<label class="row"><span class="row-label">${esc(label)}</span><input type="${o.type || 'text'}" class="${o.mono ? 'mono' : ''}" data-path="${path}" value="${esc(getPath(C, path))}" placeholder="${esc(o.placeholder || '')}" ${o.list ? `list="${o.list}"` : ''} ${o.attrs || ''} autocapitalize="off" autocorrect="off" spellcheck="false"></label>`,
     select: (label, path, opts, o = {}) => `<label class="row"><span class="row-label">${esc(label)}</span><select data-path="${path}" ${o.num ? 'data-num' : ''} ${o.rerender ? 'data-rerender' : ''}>${opts.map(([v, t]) => `<option value="${esc(v)}" ${String(getPath(C, path)) === String(v) ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`,
     toggle: (label, path) => `<label class="row"><span class="row-label" style="max-width:70%">${esc(label)}</span><span class="switch"><input type="checkbox" data-path="${path}" ${getPath(C, path) ? 'checked' : ''}><i></i></span></label>`,
     area: (label, path, placeholder) => `<label class="row-stack row"><span>${esc(label)}</span><textarea class="area" rows="3" data-path="${path}" placeholder="${esc(placeholder)}">${esc(getPath(C, path))}</textarea></label>`,
     range: (label, path, min, max, step, fmt) => `<label class="row"><span class="row-label">${esc(label)}</span><input type="range" data-path="${path}" data-num data-fmt="${fmt}" min="${min}" max="${max}" step="${step}" value="${esc(getPath(C, path))}"><span class="row-num">${fmtVal(getPath(C, path), fmt)}</span></label>`,
-    seg: (label, path, opts, num) => `<div class="row"><span class="row-label">${esc(label)}</span><span class="segmented" role="group" aria-label="${esc(label)}">${opts.map(([v, t]) => `<button type="button" data-seg="${path}" data-v="${esc(v)}" ${num ? 'data-num' : ''} aria-pressed="${String(getPath(C, path)) === String(v)}">${esc(t)}</button>`).join('')}</span></div>`,
+    seg: (label, path, opts) => `<div class="row"><span class="row-label">${esc(label)}</span><span class="segmented" role="group" aria-label="${esc(label)}">${opts.map(([v, t]) => `<button type="button" data-seg="${path}" data-v="${esc(v)}" aria-pressed="${String(getPath(C, path)) === String(v)}">${esc(t)}</button>`).join('')}</span></div>`,
     btn: (label, action, cls = '') => `<button class="row row-btn ${cls}" type="button" data-act="${action}">${esc(label)}</button>`,
     group: (head, rows, foot = '') => `<div class="group">${head ? `<div class="group-head"><span>${esc(head)}</span></div>` : ''}<div class="list">${rows.join('')}</div>${foot ? `<div class="group-foot">${foot}</div>` : ''}</div>`,
   };
-  const fmtVal = (v, fmt) => (fmt === 'pct' ? Math.round(v * 100) + '%' : fmt === 'px' ? v + ' px' : String(v));
 
   function renderSettings() {
     const pv = C.ai.provider, P = DEF.providers[pv];
     const key = C.ai.keys[pv];
+    const nAi = C.presets.filter((p) => p.engine === 'ai').length;
     const aiRows = [
+      R.toggle(`Tampilkan ${nAi} efek AI di Studio`, 'app.showAi'),
       R.select('Penyedia', 'ai.provider', Object.entries(DEF.providers).map(([k, v]) => [k, v.label]), { rerender: true }),
       `<label class="row"><span class="row-label">API key</span><input type="password" class="mono" id="key-input" data-path="ai.keys.${pv}" value="${esc(key)}" placeholder="${esc(P.keyHint)}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="eye" type="button" data-act="eye">Lihat</button></label>`,
       R.text('Model', `ai.${pv}.model`, { mono: true, list: 'model-list', placeholder: P.model }),
@@ -815,24 +996,21 @@
       R.select('Kualitas', 'ai.openai.quality', [['auto', 'Otomatis'], ['low', 'Rendah (murah)'], ['medium', 'Sedang'], ['high', 'Tinggi']]),
       R.select('Kemiripan wajah', 'ai.openai.fidelity', [['', 'Bawaan model'], ['high', 'Tinggi'], ['low', 'Rendah']]),
     );
+    aiRows.push(
+      R.area('Awalan prompt', 'prompt.prefix', 'Kosong'),
+      R.area('Akhiran prompt', 'prompt.suffix', 'Kosong'),
+      R.select('Rasio hasil AI', 'prompt.aspect', ASPECTS.map((a) => [a, a || 'Ikuti foto asli'])),
+    );
     $('#settings').innerHTML =
-      R.group('Mesin AI', aiRows, `${key ? 'Key tersimpan di perangkat ini saja dan dikirim langsung ke penyedia.' : `Buat key di <span class="mono">${esc(P.keyUrl)}</span>. Key tersimpan di perangkat ini saja dan dikirim langsung ke penyedia.`} Tiap penyedia menyimpan key, model, dan URL-nya sendiri.<datalist id="model-list">${P.suggestions.map((m) => `<option value="${esc(m)}">`).join('')}</datalist>`)
-      + R.group('Prompt', [
-        R.area('Awalan — ditaruh sebelum setiap prompt', 'prompt.prefix', 'Kosong'),
-        R.area('Akhiran — ditaruh setelah setiap prompt', 'prompt.suffix', 'Kosong'),
-        R.select('Rasio hasil', 'prompt.aspect', ASPECTS.map((a) => [a, a || 'Ikuti foto asli'])),
-        R.seg('Gabung efek, maks.', 'prompt.maxStack', [[1, '1'], [2, '2'], [3, '3'], [5, '5']], true),
-      ], 'Awalan dan akhiran berlaku untuk semua efek. Rasio bisa ditimpa per efek di tab Efek.')
-      + R.group('Foto', [
-        R.select('Sisi terpanjang saat dikirim', 'image.maxSide', [[1024, '1024 px'], [1536, '1536 px'], [2048, '2048 px'], [3072, '3072 px']], { num: true }),
-        R.range('Kualitas JPEG', 'image.quality', 0.5, 1, 0.05, 'pct'),
-        R.toggle('Simpan hasil ke Galeri otomatis', 'image.autoSave'),
+      R.group('Foto', [
+        R.select('Resolusi kerja & simpan', 'image.maxSide', [[1280, '1280 px'], [2048, '2048 px'], [3072, '3072 px'], [4096, '4096 px']], { num: true }),
+        R.range('Kualitas JPEG', 'image.quality', 0.6, 1, 0.01, 'pct'),
+        R.toggle('Masukkan hasil ke Galeri otomatis', 'image.autoSave'),
         R.select('Batas isi Galeri', 'image.maxHistory', [[20, '20 hasil'], [60, '60 hasil'], [120, '120 hasil'], [300, '300 hasil']], { num: true }),
-      ], 'Foto diperkecil di perangkat sebelum dikirim. Makin besar makin detail, tapi lebih lambat dan mahal.')
+      ], 'Semua pengeditan dikerjakan di perangkat ini — foto tidak dikirim ke mana pun. Resolusi baru berlaku untuk foto yang dibuka berikutnya.')
       + R.group('Tampilan', [
         R.text('Nama aplikasi', 'app.name', { placeholder: 'Slash Photo', attrs: 'maxlength="24" data-live' }),
         R.seg('Tema', 'app.theme', [['auto', 'Otomatis'], ['light', 'Terang'], ['dark', 'Gelap']]),
-        R.seg('Kolom efek', 'app.columns', [[2, '2'], [3, '3']], true),
         `<div class="swatches" role="group" aria-label="Warna aksen">${ACCENTS.map((c) => `<button class="swatch" type="button" data-accent="${c}" style="background:${c}" aria-pressed="${C.app.accent.toUpperCase() === c}" aria-label="Aksen ${c}"></button>`).join('')}
           <label class="row" style="padding:0;min-height:0;width:auto;margin-left:auto"><input type="color" data-path="app.accent" data-live value="${esc(C.app.accent)}" aria-label="Warna aksen kustom"></label></div>`,
       ])
@@ -840,10 +1018,11 @@
         `<button class="row row-btn" type="button" data-act="goto-presets">Edit ${C.presets.length} efek${icon(I.chev, 16)}</button>`,
         `<button class="row row-btn" type="button" data-act="cats">Kelola ${C.categories.length} kategori${icon(I.chev, 16)}</button>`,
       ])
+      + R.group('AI (opsional)', aiRows, `Hanya dipakai efek bertanda AI — yang mengubah isi foto dan tidak bisa dikerjakan editor. ${key ? '' : `Buat key di <span class="mono">${esc(P.keyUrl)}</span>. `}Key tersimpan di perangkat ini saja; saat dipakai, fotomu dikirim ke penyedia tersebut.<datalist id="model-list">${P.suggestions.map((m) => `<option value="${esc(m)}">`).join('')}</datalist>`)
       + R.group('Cadangan', [
         R.btn('Ekspor konfigurasi (.json)', 'export'),
         R.btn('Impor konfigurasi', 'import'),
-      ], 'Berisi semua efek, kategori, dan setelan. API key tidak ikut diekspor.')
+      ], 'Berisi semua efek beserta pengaturannya, kategori, dan setelan. API key tidak ikut diekspor.')
       + R.group('Reset', [
         R.btn('Reset efek & kategori ke bawaan', 'reset-presets', 'danger'),
         R.btn('Kosongkan Galeri', 'clear-gallery', 'danger'),
@@ -860,11 +1039,10 @@
     setPath(C, path, v);
     save();
     if (el.type === 'range') el.nextElementSibling.textContent = fmtVal(v, el.dataset.fmt);
-    if (path.startsWith('app.') || path.startsWith('ai.')) applyAppearance();
-    if (path === 'prompt.maxStack') { S.sel = S.sel.slice(0, v); }
+    if (path.startsWith('app.')) applyAppearance();
+    if (path === 'app.showAi') { if (!v && isAi()) selectFx(null); renderFilters(); }
     if (path === 'app.accent') $$('.swatch').forEach((s) => s.setAttribute('aria-pressed', String(s.dataset.accent === String(v).toUpperCase())));
     if (el.hasAttribute('data-rerender')) renderSettings();
-    renderComposer();
   }
 
   async function settingsAction(act) {
@@ -879,22 +1057,19 @@
     if (act === 'export') {
       const out = clone(C);
       out.ai.keys = { gemini: '', openai: '', openrouter: '' };
-      const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob); a.download = 'slash-photo-config.json';
-      document.body.append(a); a.click(); a.remove();
+      download(new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' }), 'slash-photo-config');
       toast('Konfigurasi diekspor');
     }
     if (act === 'import') $('#file-import').click();
     if (act === 'reset-presets' && await ask({ title: 'Reset efek & kategori?', text: 'Semua efek buatanmu dan perubahan pada efek bawaan akan hilang.', ok: 'Reset', danger: true })) {
       C.presets = clone(DEF.config.presets); C.categories = clone(DEF.config.categories);
-      S.sel = []; save(); renderAll(); toast('100 efek bawaan dipulihkan');
+      save(); selectFx(null); renderAll(); queueThumbs(); toast('100 efek bawaan dipulihkan');
     }
     if (act === 'clear-gallery' && await ask({ title: 'Kosongkan Galeri?', text: 'Semua hasil di perangkat ini dihapus permanen.', ok: 'Hapus semua', danger: true })) {
       await DB.clear(); toast('Galeri dikosongkan');
     }
-    if (act === 'reset-all' && await ask({ title: 'Reset semua setelan?', text: 'API key, efek, kategori, dan tampilan kembali ke awal. Galeri tidak ikut terhapus.', ok: 'Reset', danger: true })) {
-      C = clone(DEF.config); S.sel = []; S.override = null; save(); renderAll(); toast('Semua setelan direset');
+    if (act === 'reset-all' && await ask({ title: 'Reset semua setelan?', text: 'Efek, kategori, tampilan, dan API key kembali ke awal. Galeri tidak ikut terhapus.', ok: 'Reset', danger: true })) {
+      C = clone(DEF.config); save(); selectFx(null); renderAll(); queueThumbs(); toast('Semua setelan direset');
     }
   }
 
@@ -909,10 +1084,10 @@
       sh.body.onclick = (e) => {
         const m = e.target.closest('[data-model]')?.dataset.model;
         if (!m) return;
-        C.ai[pv].model = m; save(); applyAppearance(); renderSettings(); sh.close(); toast(`Model: ${m}`);
+        C.ai[pv].model = m; save(); renderSettings(); sh.close(); toast(`Model: ${m}`);
       };
     } catch (e) {
-      sh.body.innerHTML = `<div class="error" role="alert"><div><b>Koneksi gagal</b></div><div class="error-msg">${esc(e.message)}</div></div>`;
+      sh.body.innerHTML = `<div class="error" role="alert"><div class="error-msg"><b>Koneksi gagal.</b> ${esc(e.message)}</div></div>`;
     }
   }
 
@@ -923,16 +1098,16 @@
       const cats = j.categories.filter((c) => isObj(c) && c.id && c.name).map((c) => ({ id: String(c.id), name: String(c.name), emoji: String(c.emoji || '📁'), color: /^#[0-9a-f]{6}$/i.test(c.color) ? c.color : '#8E8E93' }));
       if (!cats.length) throw new Error('bad');
       const seen = new Set();
-      const presets = j.presets.filter((p) => isObj(p) && normCmd(p.cmd) && p.prompt && !seen.has(normCmd(p.cmd)) && seen.add(normCmd(p.cmd))).map((p) => ({
-        id: String(p.id || uid()), cmd: normCmd(p.cmd), name: String(p.name || p.cmd), prompt: String(p.prompt),
-        cat: cats.some((c) => c.id === p.cat) ? p.cat : cats[0].id, aspect: ASPECTS.includes(p.aspect) ? p.aspect : '', fav: !!p.fav, hidden: !!p.hidden, builtin: !!p.builtin,
+      const presets = j.presets.filter((p) => isObj(p) && normCmd(p.cmd) && !seen.has(normCmd(p.cmd)) && seen.add(normCmd(p.cmd))).map((p) => normPreset({
+        id: String(p.id || uid()), cmd: normCmd(p.cmd), name: String(p.name || p.cmd), prompt: String(p.prompt || ''),
+        cat: cats.some((c) => c.id === p.cat) ? p.cat : cats[0].id, engine: p.engine, recipe: p.recipe,
+        aspect: ASPECTS.includes(p.aspect) ? p.aspect : '', fav: !!p.fav, hidden: !!p.hidden, builtin: !!p.builtin,
       }));
       const keys = C.ai.keys;
       C = merge(clone(DEF.config), { ...j, categories: cats, presets });
       C.ai.keys = { ...clone(DEF.config.ai.keys), ...keys };
       if (!DEF.providers[C.ai.provider]) C.ai.provider = 'gemini';
-      S.sel = []; S.override = null;
-      save(); renderAll();
+      save(); selectFx(null); renderAll(); queueThumbs();
       toast(`Diimpor: ${presets.length} efek, ${cats.length} kategori`);
     } catch { toast('File konfigurasi tidak valid'); }
   }
@@ -943,14 +1118,13 @@
     S.tab = tab;
     $$('.view').forEach((v) => (v.hidden = v.dataset.view !== tab));
     $$('#tabbar button').forEach((b) => (b.dataset.tab === tab ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')));
-    $('#composer').hidden = tab !== 'studio';
     if (tab === 'gallery') renderGallery();
     if (tab === 'settings') renderSettings();
     if (tab === 'presets') renderPresetList();
-    window.scrollTo(0, S.scroll[tab] || 0);
+    window.scrollTo(0, tab === 'studio' ? 0 : S.scroll[tab] || 0);
   }
   function renderAll() {
-    applyAppearance(); renderStage(); renderFilters(); renderGrid(); renderComposer(); renderPresetList();
+    applyAppearance(); renderStage(); renderFilters(); renderComposer(); renderAdj(); renderPresetList();
     if (S.tab === 'settings') renderSettings();
   }
 
@@ -966,21 +1140,37 @@
     if (a === 'lib' || a === 'change') $('#file-lib').click();
     if (a === 'cam') $('#file-cam').click();
     if (a === 'cancel') S.abort?.abort();
-    if (a === 'show-src') { S.show = 'src'; renderStage(); }
-    if (a === 'show-out') { S.show = 'out'; renderStage(); }
-    if (a === 'save' && S.out) download(S.out.blob, fileName(S.out.cmds));
-    if (a === 'share' && S.out) share(S.out.blob, fileName(S.out.cmds));
-    if (a === 'chain' && S.out) { const b = S.out.blob; S.out = null; setSource(b); toast('Hasil jadi foto sumber'); }
-    if (a === 'redo') generate();
+    if (a === 'show-src' || a === 'show-out') { S.show = a === 'show-src' ? 'src' : 'out'; renderStage(); requestDraw(); }
+    if (a === 'undo' && S.undo) { S.src = S.undo; S.undo = null; renderStage(); requestDraw(); queueThumbs(); toast('Kembali ke foto sebelum AI'); }
+    if (a === 'retry') generate();
+    if (a === 'dismiss') { S.error = null; renderStage(); }
     if (a === 'open-settings') go('settings');
+    if (a === 'save-fx') {
+      const p = curFx();
+      p.recipe = currentRecipe(); p.engine = 'local';
+      save(); selectFx(p.id); queueThumbs(p.id); renderPresetList();
+      toast(`Tersimpan ke /${p.cmd}`);
+    }
+    if (a === 'save-new') presetSheet(null, { recipe: currentRecipe(), cat: curFx()?.cat || C.categories[0].id, name: curFx() ? curFx().name + ' (versiku)' : '' });
+    if (a === 'revert') selectFx(S.fx);
+    const mode = e.target.closest('[data-mode]')?.dataset.mode;
+    if (mode) setMode(mode);
     const f = e.target.closest('[data-f]')?.dataset.f;
-    if (f) { S.filter = f; renderFilters(); renderGrid(); }
-    const id = e.target.closest('.tile')?.dataset.id;
-    if (id) toggleSel(id);
+    if (f) { S.filter = f; renderFilters(); $('#strip').scrollLeft = 0; }
+    const g = e.target.closest('[data-g]')?.dataset.g;
+    if (g) { S.group = g; renderAdj(); $('#adj-list').scrollTop = 0; }
+    const zero = e.target.closest('[data-zero]')?.dataset.zero;
+    if (zero) { S.adj[zero] = FX.BY_KEY[zero].d; renderAdj(); renderStage(); requestDraw(); }
+    const fx = e.target.closest('.fx');
+    if (fx) selectFx(fx.dataset.id === S.fx ? null : fx.dataset.id || null);
   });
+  $('#adj-list').addEventListener('input', onAdjInput);
+  $('#adj-list').addEventListener('change', (e) => { onAdjInput(e); renderStage(); renderAdj(); });
+  $('#btn-save').addEventListener('click', exportImage);
+  $('#btn-reset').addEventListener('click', resetAll);
 
   for (const id of ['#file-lib', '#file-cam']) {
-    $(id).addEventListener('change', (e) => { onPick(e.target.files[0]); e.target.value = ''; });
+    $(id).addEventListener('change', (e) => { if (e.target.files[0]) setSource(e.target.files[0]); e.target.value = ''; });
   }
   $('#file-import').addEventListener('change', (e) => { if (e.target.files[0]) importConfig(e.target.files[0]); e.target.value = ''; });
 
@@ -988,10 +1178,14 @@
   const stage = $('#stage');
   stage.addEventListener('dragover', (e) => { e.preventDefault(); stage.classList.add('dragover'); });
   stage.addEventListener('dragleave', () => stage.classList.remove('dragover'));
-  stage.addEventListener('drop', (e) => { e.preventDefault(); stage.classList.remove('dragover'); onPick([...e.dataTransfer.files].find((f) => f.type.startsWith('image/'))); });
+  stage.addEventListener('drop', (e) => {
+    e.preventDefault(); stage.classList.remove('dragover');
+    const f = [...e.dataTransfer.files].find((x) => x.type.startsWith('image/'));
+    if (f) setSource(f);
+  });
   document.addEventListener('paste', (e) => {
     const f = [...(e.clipboardData?.files || [])].find((x) => x.type.startsWith('image/'));
-    if (f && S.tab === 'studio') onPick(f);
+    if (f && S.tab === 'studio') setSource(f);
   });
 
   const cmdInput = $('#cmd-input');
@@ -1006,26 +1200,15 @@
     } else if (open && (e.key === 'Enter' || e.key === 'Tab')) {
       e.preventDefault(); acceptSuggest(items[S.sugIndex].dataset.id);
     } else if (e.key === 'Escape') closeSuggest();
-    else if (e.key === 'Enter') { e.preventDefault(); generate(); }
-    else if (e.key === 'Backspace' && !cmdInput.value && S.sel.length) { S.sel.pop(); S.override = null; renderGrid(); renderComposer(); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (isAi()) generate(); else cmdInput.blur(); }
   });
   $('#suggest').addEventListener('pointerdown', (e) => {
     const id = e.target.closest('[data-id]')?.dataset.id;
     if (id) { e.preventDefault(); acceptSuggest(id); }
   });
   cmdInput.addEventListener('blur', () => setTimeout(closeSuggest, 120));
-  $('#sel').addEventListener('click', (e) => {
-    const rm = e.target.closest('[data-rm]')?.dataset.rm;
-    if (!rm) return;
-    if (rm === 'override') S.override = null; else S.sel = S.sel.filter((x) => x !== rm);
-    if (rm !== 'override') S.override = null;
-    renderGrid(); renderComposer();
-  });
   $('#btn-go').addEventListener('click', generate);
-  $('#btn-prompt').addEventListener('click', () => {
-    if (!hasPrompt()) return toast('Pilih efek atau tulis instruksi dulu');
-    promptSheet();
-  });
+  $('#btn-prompt').addEventListener('click', promptSheet);
 
   // Efek tab
   $('#preset-search').addEventListener('input', (e) => { S.query = e.target.value; renderPresetList(); });
@@ -1054,30 +1237,27 @@
   });
   st.addEventListener('click', (e) => {
     const seg = e.target.closest('[data-seg]');
-    if (seg) {
-      setPath(C, seg.dataset.seg, seg.hasAttribute('data-num') ? Number(seg.dataset.v) : seg.dataset.v);
-      if (seg.dataset.seg === 'prompt.maxStack') S.sel = S.sel.slice(0, C.prompt.maxStack);
-      save(); applyAppearance(); renderSettings(); renderGrid(); renderComposer();
-      return;
-    }
+    if (seg) { setPath(C, seg.dataset.seg, seg.dataset.v); save(); applyAppearance(); renderSettings(); return; }
     const acc = e.target.closest('[data-accent]')?.dataset.accent;
     if (acc) { C.app.accent = acc; save(); applyAppearance(); renderSettings(); return; }
     const act = e.target.closest('[data-act]')?.dataset.act;
     if (act) settingsAction(act);
   });
 
-  // keep the composer above the on-screen keyboard (iOS doesn't move fixed elements)
+  // keep the layout above the on-screen keyboard (iOS doesn't resize the page for it)
   const vv = window.visualViewport;
   if (vv) {
     const onVV = () => {
       const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      document.documentElement.style.setProperty('--kb', kb > 80 ? kb + 'px' : '0px');
-      document.body.classList.toggle('kb-open', kb > 80);
+      const open = kb > 80;
+      document.documentElement.style.setProperty('--kb', open ? kb + 'px' : '0px');
+      document.documentElement.style.setProperty('--vh', open ? vv.height + 'px' : '100dvh');
+      document.body.classList.toggle('kb-open', open);
+      if (open && S.tab === 'studio') window.scrollTo(0, 0);
     };
     vv.addEventListener('resize', onVV);
     vv.addEventListener('scroll', onVV);
   }
-
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     const top = $('#layer').lastElementChild;

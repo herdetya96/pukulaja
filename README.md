@@ -60,9 +60,9 @@ in memory and nothing is stored or transmitted.
 
 # Slash Photo 📸 (`photo/`)
 
-An iOS-style photo app that lives in the `photo/` folder: pick a photo, choose
-one of 100 `/slash` commands (or type your own), and an AI image model applies
-the edit. **Everything is configurable in the app** — no code changes needed.
+An iOS-style photo editor that lives in the `photo/` folder. Pick a photo, choose
+one of 100 `/slash` effects, then fine-tune every setting with sliders. Editing
+runs **on the device** (WebGL) — no account, no API key, nothing uploaded.
 
 ## Run it
 
@@ -76,23 +76,31 @@ python3 -m http.server 4173
 On an iPhone, open the hosted URL in Safari → Share → **Add to Home Screen**.
 It then launches full-screen like a native app.
 
+## How it works
+
+- **76 effects are on-device "recipes"** — plain sets of editor parameters
+  (exposure, colour, grain, lens distortion, light leaks, frames, …). Selecting
+  one loads its values into the sliders; thumbnails are rendered from your photo.
+- **24 effects need an AI model** because they change what is *in* the photo
+  (new camera angle, cloned subject, new background). They are tagged "AI", are
+  optional, and can be hidden in Setelan. They need your own API key
+  (Google Gemini, OpenAI, or OpenRouter-compatible).
+
 ## What you can edit
 
 | Where | What |
 |---|---|
-| **Efek** tab | Every effect's command, name, prompt, category and output ratio. Add, duplicate, hide, favourite, reorder, delete, or restore a built-in. |
-| **Efek → Kelola kategori** | Category emoji, name, colour and order. Add or delete categories. |
-| **Setelan → Mesin AI** | Provider (Google Gemini, OpenAI, OpenRouter / compatible), API key, model, base URL. "Tes koneksi & pilih model" lists the image models your key can use. |
-| **Setelan → Prompt** | Text added before/after every prompt, default output ratio, how many effects can be stacked. |
-| **Setelan → Foto** | Upload size, JPEG quality, auto-save to gallery, gallery limit. |
-| **Setelan → Tampilan** | App name, accent colour, light/dark theme, grid columns. |
-| **Setelan → Cadangan** | Export / import the whole configuration as JSON. |
-| Studio → `{ }` | The final prompt for a single run, before it is sent. |
+| Studio → **Atur** | ~75 parameters in 7 groups: Cahaya, Warna, Detail, Lensa, Sinar, Tekstur, Bingkai. Plus overall effect strength. Tap a number to reset it. |
+| Studio → Atur → Kekuatan | Save the current sliders back into the effect, or as a new effect. |
+| **Efek** tab | Each effect's command, name, category, engine (on-device or AI), its settings as JSON, and its AI prompt. Add, duplicate, hide, favourite, reorder, delete, restore. |
+| Efek → Kelola kategori | Category emoji, name, colour, order. |
+| **Setelan** | Working/export resolution, JPEG quality, gallery, app name, theme, accent colour, AI provider/key/model/base URL/prompt wrapper. |
+| Setelan → Cadangan | Export / import the whole configuration as JSON. |
 
-## Notes
+## Files
 
-- You need your own API key from the provider you choose. It is stored only in
-  this browser (`localStorage`) and sent straight to that provider.
-- Photos are resized on the device and sent only to the provider you configured.
-  Results are kept in the browser's IndexedDB (the **Galeri** tab).
-- Default data lives in `photo/presets.js`; app logic in `photo/app.js`.
+- `photo/engine.js` — the photo engine: parameter schema, shaders, frames.
+- `photo/presets.js` — default categories, effects and their recipes.
+- `photo/app.js` — UI and state. `photo/styles.css` — iOS-style look.
+
+Settings live in `localStorage`; saved results in IndexedDB (the **Galeri** tab).

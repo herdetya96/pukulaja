@@ -132,10 +132,99 @@
     ],
   };
 
+
+  // On-device looks: each is a set of editor parameters (see engine.js PARAMS).
+  // Commands missing from this map change what is *in* the photo, so they can only run through an AI model.
+  const recipes = {
+    // camera
+    fisheye: { distort: 85, vignette: 72, chroma: 25, sharpen: 15 },
+    pointfive: { distort: -55, saturation: 8, contrast: 8, vignette: 14, sharpen: 12 },
+    dutchangle: { rotate: 18, contrast: 14, vignette: 20 },
+    reflectionshot: { mirror: 'reflect', contrast: 8, temp: -8 },
+    throughglass: { ghost: 24, fog: 16, fogColor: '#cfd9e6', soft: 8, flare: 20, flareX: 84, flareY: 16, contrast: -8, dust: 14 },
+    telephoto: { zoom: 38, focus: 32, contrast: 10, sharpen: 20, saturation: 5 },
+    macroshot: { zoom: 70, focus: 78, sharpen: 45, contrast: 12, vibrance: 20 },
+    widecinema: { crop: '21:9', contrast: 12, splitAmt: 45, splitShadow: '#0f6f7a', splitHigh: '#ffb36b', grain: 12, vignette: 22 },
+    securitycam: { bw: 85, colorize: 22, colorizeColor: '#7fae8a', contrast: 18, distort: 30, rotate: -4, scan: 45, grain: 40, soft: 16, fade: 20, vignette: 35, osd: 'cctv' },
+    // lighting
+    nighttimeflash: { flash: 85, exposure: -8, contrast: 22, temp: -8, grain: 14, saturation: -6 },
+    goldenhour: { temp: 42, tint: 8, exposure: 6, shadows: 12, glow: 30, saturation: 12, flare: 28, flareX: 86, flareY: 14, splitAmt: 30, splitShadow: '#7a4a2a', splitHigh: '#ffd08a' },
+    bluehour: { temp: -45, tint: 6, exposure: -12, contrast: 8, saturation: -8, splitAmt: 45, splitShadow: '#1b2f6b', splitHigh: '#9fb7ff', vignette: 22, glow: 12 },
+    neonglow: { neon: 85, neonA: '#ff2bd6', neonB: '#19e3ff', contrast: 15, exposure: -10, saturation: 15, glow: 25, grain: 8 },
+    spotlight: { spot: 92, spotX: 50, spotY: 38, spotSize: 42, contrast: 14 },
+    silhouette: { contrast: 95, shadows: -100, exposure: -18, highlights: 40, saturation: -20, temp: 15 },
+    sunflare: { flare: 85, flareX: 78, flareY: 16, temp: 14, glow: 22, fade: 10, exposure: 5 },
+    moonlight: { temp: -55, exposure: -30, saturation: -45, contrast: 16, splitAmt: 40, splitShadow: '#0c1a4a', splitHigh: '#bcd0ff', vignette: 40, grain: 10 },
+    candlelit: { temp: 60, exposure: -22, spot: 60, spotX: 50, spotY: 62, spotSize: 55, contrast: 10, saturation: -5, glow: 22, grain: 10, colorize: 12, colorizeColor: '#ff9a3c' },
+    projectorlight: { dots: 55, prism: 60, neon: 35, neonA: '#ff3d6e', neonB: '#3d7bff', contrast: 10, exposure: -8 },
+    hardflash: { flash: 65, contrast: 30, exposure: 0, sharpen: 30, saturation: 6, highlights: 20 },
+    softbox: { glow: 18, contrast: -14, shadows: 35, highlights: -20, exposure: 8, saturation: -4, sharpen: 10 },
+    rimlight: { edge: 70, edgeColor: '#ffe2b0', exposure: -18, contrast: 22, vignette: 35 },
+    windowlight: { winlight: 75, pattern: 'grid', patternAmt: 28, patternAngle: -12, temp: 10, contrast: 8, fade: 6 },
+    discolight: { dots: 90, neon: 40, neonA: '#b34dff', neonB: '#ff4d9d', exposure: -14, contrast: 12, glow: 25 },
+    // film
+    disposable: { flash: 35, grain: 45, temp: 10, tint: 6, fade: 14, saturation: 12, contrast: 10, vignette: 28, leak: 18, leakSide: 'right', soft: 6, osd: 'date' },
+    polaroid: { frame: 'polaroid', crop: '1:1', fade: 30, contrast: -10, temp: 12, tint: -6, saturation: -12, grain: 18, vignette: 22, soft: 8, splitAmt: 25, splitShadow: '#2a4a5a', splitHigh: '#fff0c8' },
+    y2kdigital: { flash: 45, sharpen: 40, saturation: 20, contrast: 14, grain: 26, temp: -6, chroma: 10, osd: 'date' },
+    film35mm: { grain: 38, fade: 12, temp: 8, saturation: -6, contrast: 8, highlights: -18, glow: 10, vignette: 16, splitAmt: 22, splitShadow: '#1f4a4a', splitHigh: '#ffd9a8' },
+    vhsframe: { crop: '4:3', scan: 55, tracking: 65, chroma: 55, soft: 22, saturation: 18, contrast: -6, fade: 18, grain: 30, osd: 'vhs' },
+    camcorder: { crop: '4:3', scan: 25, chroma: 28, soft: 14, saturation: 10, grain: 26, fade: 10, sharpen: 20, vignette: 14, osd: 'camcorder' },
+    filmnegative: { invert: true, splitAmt: 60, splitShadow: '#ff8a3c', splitHigh: '#ff9a50', contrast: -8, grain: 18 },
+    expiredfilm: { fade: 35, tint: 22, temp: -10, saturation: -18, contrast: -12, grain: 48, leak: 45, leakColor: '#ff4a2a', leakSide: 'left', hue: -8, vignette: 20, dust: 35 },
+    lomography: { saturation: 45, contrast: 32, vignette: 75, hue: 10, splitAmt: 28, splitShadow: '#1a3fa0', splitHigh: '#ffe14d', grain: 22, chroma: 18, distort: 12 },
+    blackwhitefilm: { bw: 100, contrast: 42, grain: 42, vignette: 22, shadows: -15, highlights: 12 },
+    lightleak: { leak: 80, leakColor: '#ff3d1f', leakSide: 'left', fade: 10, temp: 8, grain: 14 },
+    vintagepostcard: { frame: 'postcard', crop: '3:2', fade: 38, saturation: -22, temp: 20, contrast: -10, halftone: 14, grain: 22, dust: 20, text1: 'GREETINGS', text2: 'Wish you were here', textColor: '#fff3d6', frameColor: '#f1e6cf' },
+    paparazzi2000: { flash: 70, contrast: 28, grain: 30, rotate: -6, motion: 8, motionAngle: 10, saturation: 8, sharpen: 22, vignette: 25, osd: 'date' },
+    filmcontact: { frame: 'film', bw: 100, contrast: 22, grain: 26, frameColor: '#e9e6df' },
+    retrobooth: { frame: 'strip', bw: 100, contrast: 26, grain: 30, fade: 14, flash: 30, colorize: 10, colorizeColor: '#c9b08a', frameColor: '#f4f1ea' },
+    // cinema
+    moviestill: { frame: 'letterbox', contrast: 16, splitAmt: 55, splitShadow: '#0c5f73', splitHigh: '#ffb066', saturation: -6, grain: 16, vignette: 28, glow: 10 },
+    dreamsequence: { glow: 70, soft: 28, fade: 22, saturation: -8, temp: 6, tint: 14, exposure: 2, splitAmt: 35, splitShadow: '#7a5cff', splitHigh: '#ffd1ec', vignette: -12, chroma: 10 },
+    thrillerscene: { frame: 'letterbox', exposure: -22, contrast: 34, saturation: -38, temp: -20, splitAmt: 45, splitShadow: '#0a3a44', splitHigh: '#c9d6c2', vignette: 55, grain: 22 },
+    romcomscene: { temp: 22, exposure: 12, saturation: 22, vibrance: 25, contrast: 6, glow: 28, shadows: 20, fade: 6, splitAmt: 20, splitShadow: '#8a4a5a', splitHigh: '#ffe6b8' },
+    horrorframe: { frame: 'letterbox', exposure: -30, contrast: 30, saturation: -55, temp: -18, tint: -14, fog: 45, fogColor: '#8f9c96', vignette: 70, grain: 38, splitAmt: 30, splitShadow: '#0b2a1a', splitHigh: '#b8c9b0' },
+    wespalette: { mirror: 'split', fade: 28, saturation: 18, temp: 18, contrast: -12, splitAmt: 55, splitShadow: '#5fb8a8', splitHigh: '#ffc2c2', frame: 'border', frameColor: '#f5d9b8', frameSize: 30, grain: 10 },
+    noirscene: { bw: 100, contrast: 60, shadows: -35, highlights: 15, vignette: 55, grain: 34, pattern: 'blinds', patternAmt: 38, patternAngle: -18, fog: 10 },
+    underwaterscene: { temp: -40, tint: -22, saturation: -10, caustic: 65, bubbles: 55, fog: 30, fogColor: '#1b6f86', contrast: -6, soft: 10, vignette: 35, colorize: 18, colorizeColor: '#2aa6b8' },
+    rainyscene: { rain: 75, temp: -18, saturation: -25, contrast: 10, exposure: -12, fog: 18, fogColor: '#8b97a3', soft: 5, vignette: 25 },
+    snowfall: { snow: 75, temp: -22, exposure: 10, saturation: -20, fade: 16, contrast: -6, fog: 16, fogColor: '#e8eef5' },
+    foggycinema: { frame: 'letterbox', fog: 70, fogColor: '#c5ccd2', contrast: -18, saturation: -22, glow: 20, grain: 12 },
+    // fashion
+    voguecover: { frame: 'cover', crop: '4:5', contrast: 16, saturation: -6, sharpen: 20, glow: 10, text1: 'MODE', text2: 'The New Icon', text3: 'Style without rules|The summer edit|+ 48 looks to try' },
+    streetstyle: { crop: '4:5', contrast: 18, saturation: -14, fade: 10, grain: 20, temp: -4, sharpen: 22, vignette: 14, rotate: -2 },
+    luxurycampaign: { frame: 'campaign', contrast: 14, saturation: -22, fade: 8, splitAmt: 25, splitShadow: '#2a2420', splitHigh: '#f2e6d5', vignette: 18, text1: 'MAISON NOIR', text2: 'Collection 2026' },
+    beautyeditorial: { glow: 32, soft: 10, sharpen: 18, exposure: 8, contrast: 6, highlights: 10, shadows: 18, saturation: 6, vibrance: 15, zoom: 15 },
+    mirrorcampaign: { mirror: 'quad', contrast: 16, saturation: -10, fade: 6, vignette: 15 },
+    motioneditorial: { zoomBlur: 55, keep: 45, contrast: 14, saturation: 8 },
+    paparazziflash: { flash: 78, contrast: 30, grain: 22, rotate: 5, sharpen: 24, vignette: 30, saturation: -4 },
+    coverstory: { frame: 'headline', crop: '4:5', contrast: 22, saturation: 10, text1: 'STORY', text2: 'THE COVER STORY', text3: 'Exclusive interview|Inside the studio', textColor: '#ffe500' },
+    monochromefashion: { colorize: 85, colorizeColor: '#c2412d', contrast: 16, grain: 10 },
+    shadowplay: { pattern: 'stripes', patternAmt: 70, patternAngle: 32, contrast: 16, temp: 8 },
+    highkey: { exposure: 18, contrast: -18, shadows: 55, highlights: 10, fade: 16, saturation: -10, vignette: -45, glow: 16 },
+    lowkey: { exposure: -30, contrast: 42, shadows: -45, spot: 55, spotX: 50, spotY: 38, spotSize: 55, vignette: 55, saturation: -12 },
+    // surreal
+    snowglobe: { frame: 'globe', crop: '4:5', snow: 30, temp: -10, frameColor: '#1c2a44' },
+    papercut: { posterize: 85, soft: 18, saturation: 25, contrast: 12, edge: 55, edgeColor: '#2a1d14', grain: 10 },
+    pixelworld: { pixelate: 72, posterize: 62, saturation: 22, contrast: 12 },
+    hologram: { colorize: 78, colorizeColor: '#35e6ff', scan: 55, chroma: 45, glow: 45, contrast: 10, exposure: 6, tracking: 20, edge: 35, edgeColor: '#b8fbff', fade: 10 },
+    doubleexposure: { ghost: 62, bw: 70, contrast: 18, exposure: -4, fade: 10, colorize: 15, colorizeColor: '#8fb4c9' },
+    // insta
+    crowdblur: { motion: 70, motionAngle: 0, keep: 40, contrast: 8 },
+    prismshot: { prism: 80, chroma: 30, glow: 18, contrast: 6 },
+    papercollage: { frame: 'collage', crop: '4:5', fade: 10, saturation: 8, grain: 12, text1: 'best day ever', text2: '⭐ 🌸 ✂️', frameColor: '#efe6d6' },
+    albumcover: { frame: 'album', crop: '1:1', contrast: 22, saturation: -20, grain: 30, fade: 14, splitAmt: 45, splitShadow: '#3a1a6a', splitHigh: '#ffb48a', vignette: 30, text1: 'MIDNIGHT TAPES', text2: 'your name' },
+    contactsheet: { frame: 'sheet', contrast: 14, grain: 14, splitAmt: 30, splitShadow: '#0c5f73', splitHigh: '#ffb066', text1: 'CONTACT SHEET · ROLL 07', frameColor: '#101010', textColor: '#e8e2d0' },
+    chromatic: { chroma: 65, contrast: 8, sharpen: 10 },
+    tiltshift: { tilt: 85, tiltPos: 55, saturation: 28, contrast: 14, vibrance: 15 },
+    longexposure: { motion: 80, motionAngle: 0, keep: 35, glow: 30, contrast: 10, exposure: -6, temp: -6 },
+    papercutout3d: { posterize: 78, soft: 14, edge: 65, edgeColor: '#1b1410', saturation: 15, contrast: 10, frame: 'border', frameColor: '#f3ead9', frameSize: 45 },
+  };
+
   const presets = [];
   for (const cat of categories) {
     for (const [cmd, name, prompt] of raw[cat.id]) {
-      presets.push({ id: cmd, cmd, name, prompt, cat: cat.id, aspect: '', fav: false, hidden: false, builtin: true });
+      presets.push({ id: cmd, cmd, name, prompt, cat: cat.id, engine: recipes[cmd] ? 'local' : 'ai', recipe: recipes[cmd] || {}, aspect: '', fav: false, hidden: false, builtin: true });
     }
   }
 
@@ -168,7 +257,7 @@
 
   const config = {
     v: 1,
-    app: { name: 'Slash Photo', accent: '#FFD60A', theme: 'auto', columns: 2 },
+    app: { name: 'Slash Photo', accent: '#FFD60A', theme: 'auto', showAi: true },
     ai: {
       provider: 'gemini',
       keys: { gemini: '', openai: '', openrouter: '' },
@@ -180,12 +269,11 @@
       prefix: '',
       suffix: 'Keep the subject’s identity, face, and outfit recognizable unless the instruction says otherwise. Return one finished image.',
       aspect: '',
-      maxStack: 3,
     },
-    image: { maxSide: 1536, quality: 0.9, autoSave: true, maxHistory: 60 },
+    image: { maxSide: 2048, quality: 0.92, autoSave: true, maxHistory: 60 },
     categories,
     presets,
   };
 
-  window.SLASH_DEFAULTS = { config, providers };
+  window.SLASH_DEFAULTS = { config, providers, recipes };
 })();
